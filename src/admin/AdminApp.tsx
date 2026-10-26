@@ -4,6 +4,7 @@ import type { Language } from "../shared/types";
 import type { Theme } from "../theme";
 import { Brand, Cmd, Cursor, LanguageSwitch, Notice, TerminalWindow, ThemeToggle, t } from "../ui";
 import { SESSION_ENDED, adminApi, adminToken, type Dashboard } from "./adminApi";
+import Builder from "./Builder";
 import Library from "./Library";
 
 type Section = "dashboard" | "planner" | "library" | "builder" | "live" | "feedback" | "history";
@@ -12,7 +13,7 @@ const SECTIONS: Array<{ id: Section; en: string; th: string; icon: ReactNode; ph
   { id: "dashboard", en: "Dashboard", th: "ภาพรวม", icon: <LayoutDashboard size={17} /> },
   { id: "planner", en: "Weekly Planner", th: "แผนรายสัปดาห์", icon: <CalendarDays size={17} />, phase: 4 },
   { id: "library", en: "Lesson Library", th: "คลังบทเรียน", icon: <LibraryIcon size={17} /> },
-  { id: "builder", en: "Slide Builder", th: "สร้างสไลด์", icon: <PanelsTopLeft size={17} />, phase: 2 },
+  { id: "builder", en: "Slide Builder", th: "สร้างสไลด์", icon: <PanelsTopLeft size={17} /> },
   { id: "live", en: "Live Sessions", th: "ห้องเรียนสด", icon: <Radio size={17} />, phase: 4 },
   { id: "feedback", en: "Feedback", th: "แบบสอบถาม", icon: <MessageSquareText size={17} />, phase: 5 },
   { id: "history", en: "Training History", th: "ประวัติการอบรม", icon: <BarChart3 size={17} />, phase: 5 },
@@ -28,6 +29,10 @@ export default function AdminApp({ language, onLanguage, theme, onTheme, navigat
 }) {
   const [signedIn, setSignedIn] = useState<boolean | null>(adminToken.get() ? null : false);
   const [section, setSection] = useState<Section>(readSection);
+  const [target, setTarget] = useState<{ lessonId: string | null; slideId: string | null }>(() => {
+    const params = new URL(window.location.href).searchParams;
+    return { lessonId: params.get("lesson"), slideId: params.get("slide") };
+  });
 
   useEffect(() => {
     if (signedIn !== null) return;
@@ -43,6 +48,15 @@ export default function AdminApp({ language, onLanguage, theme, onTheme, navigat
   const go = useCallback((next: Section) => {
     setSection(next);
     window.history.replaceState({}, "", `/?view=admin&tab=${next}`);
+  }, []);
+
+  const openBuilder = useCallback((lessonId: string | null, slideId: string | null) => {
+    setTarget({ lessonId, slideId });
+    setSection("builder");
+    const params = new URLSearchParams({ view: "admin", tab: "builder" });
+    if (lessonId) params.set("lesson", lessonId);
+    if (slideId) params.set("slide", slideId);
+    window.history.replaceState({}, "", `/?${params}`);
   }, []);
 
   async function logout() {
@@ -75,18 +89,13 @@ export default function AdminApp({ language, onLanguage, theme, onTheme, navigat
     </nav>
     <section className="admin-main">
       {section === "dashboard" && <DashboardView language={language} go={go} />}
-      {section === "library" && <Library language={language} />}
+      {section === "library" && <Library language={language} onEdit={openBuilder} />}
+      {section === "builder" && <Builder language={language} lessonId={target.lessonId} slideId={target.slideId} onOpen={openBuilder} />}
       {section === "planner" && <Coming language={language} title="Weekly Planner" phase={4} items={[
         "Create a weekly plan: title, date, duration, notes and the Prompt Battle challenge",
         "Pick slides from any lesson and reorder them",
         "Duplicate last week's plan, save draft, preview, publish",
         "Publishing freezes a versioned snapshot, so later library edits never change history",
-      ]} />}
-      {section === "builder" && <Coming language={language} title="Slide Builder" phase={2} items={[
-        "Three-pane editor: slide list · 16:9 canvas · properties",
-        "Drag, resize, layer order, text formatting within the 4Seas theme, shapes",
-        "Undo/redo, autosave with conflict detection, preview and fullscreen preview",
-        "Until then: create, duplicate, reorder, rename and preview slides in the Lesson Library",
       ]} />}
       {section === "live" && <Coming language={language} title="Live Sessions" phase={4} items={[
         "Start a room from a published plan; Presenter Mode will show its snapshot",

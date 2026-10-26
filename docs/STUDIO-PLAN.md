@@ -1,6 +1,18 @@
 # 4Seas Training Studio — Assessment & Plan
 
-Status: **Phase 1 implemented** (approved with option A admin sessions; R2 planned for Phase 3). Phases 2–6 are still proposals.
+Status: **Phases 1–2 implemented** (approved with option A admin sessions; R2 planned for Phase 3). Phases 3–6 are still proposals unless marked delivered below.
+
+## Phase 2 — delivered
+
+- **Slide Builder** (`src/admin/Builder.tsx`, `Properties.tsx`): slide list, 16:9 canvas and properties panel. It reuses `SlideRenderer`, so the editor draws slides exactly as Presenter Mode will.
+- **Canvas:** click to select, Shift-click to multi-select, Ctrl+A for all. Drag to move with snapping to canvas edges and centre and to other elements (Alt turns it off). Eight resize handles with edge snapping (Shift keeps the aspect ratio). Arrow-key nudges (Shift moves 10). Double-click or Enter edits text inline; Ctrl+Enter or clicking away commits, Esc cancels.
+- **Insert:** text, rectangle, rounded rectangle, ellipse, line, terminal window, and the 6 live widgets. The image button is disabled until Phase 3.
+- **Properties:** x, y, w and h; align to canvas or to the selection; reveal step; lock; layer order; duplicate and delete. Text: font, size, A−/A+ (keeps hierarchy), bold, italic, bullets, horizontal and vertical alignment, colour. Shape: kind, fill, stroke, width, opacity. Window title and border. Widget kind. Slide title, background and presenter notes. A layers list (top first) with lock toggles.
+- **Undo/redo** (100 steps). A whole drag counts as one step.
+- **Autosave:** 0.9 s debounce, saves serialised, with a visible status. Saves are optimistically locked; a conflict offers "Load theirs" or "Keep mine". The browser warns before closing with unsaved work, and pending work is flushed when you switch slides.
+- **Preview** and fullscreen preview with reveal steps. The Library has Edit and Open in Builder entry points.
+- **Tests:** 11 new unit tests for the editor operations (move, duplicate, layers, align, snap, resize, text round-trip, validator compatibility). Browser-verified: select, drag (saved as v2), undo (v3), inline text edit (v4), insert and recolour an ellipse (v6), the conflict banner, Load theirs, and preview.
+- **Limits:** formatting applies to a whole text box; individual words can't be styled in the editor yet, although existing mixed-colour words are preserved unless that line is edited. No rotation, copy/paste between slides, or drag-to-reorder thumbnails yet.
 Baseline: commit `9d88a05` on `main`, local D1 at migrations 0001–0003.
 
 ## Phase 1 — delivered

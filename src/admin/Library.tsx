@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Download, Eye, Maximize, Plus, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Download, Eye, Maximize, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useFullscreen } from "../PresenterScreen";
 import { SlideStage } from "../slides/Deck";
 import { SlideRenderer } from "../slides/SlideRenderer";
@@ -9,7 +9,7 @@ import type { Language } from "../shared/types";
 import { Notice, TerminalWindow, t } from "../ui";
 import { adminApi, type AdminLesson, type AdminLessonDetail, type AdminSlide } from "./adminApi";
 
-export default function Library({ language }: { language: Language }) {
+export default function Library({ language, onEdit }: { language: Language; onEdit: (lessonId: string, slideId: string | null) => void }) {
   const [lessons, setLessons] = useState<AdminLesson[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -62,7 +62,7 @@ export default function Library({ language }: { language: Language }) {
 
   return <>
     <div className="admin-title">
-      <div><h1>Lesson Library</h1><p>{t(language, "Reusable lessons and slides. Editing tools arrive with the Slide Builder (Phase 2).", "บทเรียนและสไลด์ที่ใช้ซ้ำได้ เครื่องมือแก้ไขจะมาพร้อม Slide Builder (เฟส 2)")}</p></div>
+      <div><h1>Lesson Library</h1><p>{t(language, "Reusable lessons and slides. Use the pencil to edit a slide in the Slide Builder.", "บทเรียนและสไลด์ที่ใช้ซ้ำได้ กดรูปดินสอเพื่อแก้ไขสไลด์ใน Slide Builder")}</p></div>
     </div>
     {error && <Notice>{error}</Notice>}
     <div className="library">
@@ -87,12 +87,14 @@ export default function Library({ language }: { language: Language }) {
           onSave={(data) => void run(async () => setDetail((await adminApi.updateLesson(detail.id, data)).lesson))} />
         <div className="button-row">
           <button className="btn btn--accent" disabled={busy || detail.archived} onClick={() => setPicker({})}><Plus size={15} />{t(language, "Add slide", "เพิ่มสไลด์")}</button>
+          {detail.slides.length > 0 && <button className="btn" onClick={() => onEdit(detail.id, null)}><Pencil size={15} />{t(language, "Open in Builder", "เปิดใน Builder")}</button>}
           {detail.slides.length > 0 && <button className="btn" onClick={() => setPreview(0)}><Eye size={15} />{t(language, "Preview lesson", "ดูตัวอย่างบทเรียน")}</button>}
           <span className="mono-dim">{detail.slides.length} {t(language, "slides", "สไลด์")}</span>
         </div>
         {detail.slides.length ? <div className="slide-grid">
           {detail.slides.map((slide, index) => <SlideCard key={slide.id} slide={slide} index={index} count={detail.slides.length} language={language} busy={busy} archived={detail.archived}
             onPreview={() => setPreview(index)}
+            onEdit={() => onEdit(detail.id, slide.id)}
             onRename={(title) => void run(async () => replaceSlide((await adminApi.updateSlide(slide.id, { version: slide.version, title })).slide))}
             onMove={(delta) => move(index, delta)}
             onDuplicate={() => void run(async () => { await adminApi.addSlide(detail.id, { duplicateOf: slide.id, afterSlideId: slide.id }); await loadDetail(detail.id); })}
@@ -130,9 +132,9 @@ function LessonHeader({ lesson, language, busy, onSave }: { lesson: AdminLessonD
   </TerminalWindow>;
 }
 
-function SlideCard({ slide, index, count, language, busy, archived, onPreview, onRename, onMove, onDuplicate, onInsertAfter, onDelete }: {
+function SlideCard({ slide, index, count, language, busy, archived, onPreview, onEdit, onRename, onMove, onDuplicate, onInsertAfter, onDelete }: {
   slide: AdminSlide; index: number; count: number; language: Language; busy: boolean; archived: boolean;
-  onPreview: () => void; onRename: (title: string) => void; onMove: (delta: -1 | 1) => void; onDuplicate: () => void; onInsertAfter: () => void; onDelete: () => void;
+  onPreview: () => void; onEdit: () => void; onRename: (title: string) => void; onMove: (delta: -1 | 1) => void; onDuplicate: () => void; onInsertAfter: () => void; onDelete: () => void;
 }) {
   const [title, setTitle] = useState(slide.title);
   useEffect(() => setTitle(slide.title), [slide.title]);
@@ -157,6 +159,7 @@ function SlideCard({ slide, index, count, language, busy, archived, onPreview, o
         <span className="mini-tag">v{slide.version}</span>
       </div>
       {!archived && <div className="icon-row">
+        <button className="icon-button" onClick={onEdit} aria-label={t(language, "Edit in Builder", "แก้ไขใน Builder")} title={t(language, "Edit in Builder", "แก้ไขใน Builder")}><Pencil size={14} /></button>
         <button className="icon-button" disabled={busy || index === 0} onClick={() => onMove(-1)} aria-label={t(language, "Move up", "เลื่อนขึ้น")} title={t(language, "Move earlier", "เลื่อนขึ้น")}><ArrowUp size={14} /></button>
         <button className="icon-button" disabled={busy || index === count - 1} onClick={() => onMove(1)} aria-label={t(language, "Move down", "เลื่อนลง")} title={t(language, "Move later", "เลื่อนลง")}><ArrowDown size={14} /></button>
         <button className="icon-button" disabled={busy} onClick={onDuplicate} aria-label={t(language, "Duplicate", "ทำสำเนา")} title={t(language, "Duplicate", "ทำสำเนา")}><Copy size={14} /></button>
@@ -167,7 +170,7 @@ function SlideCard({ slide, index, count, language, busy, archived, onPreview, o
   </article>;
 }
 
-function TemplatePicker({ language, busy, onClose, onPick }: { language: Language; busy: boolean; onClose: () => void; onPick: (template: TemplateId) => void }) {
+export function TemplatePicker({ language, busy, onClose, onPick }: { language: Language; busy: boolean; onClose: () => void; onPick: (template: TemplateId) => void }) {
   // Preview docs are generated once; ids only need to be unique within each preview.
   const previews = useMemo(() => {
     let counter = 0;
@@ -192,10 +195,12 @@ function TemplatePicker({ language, busy, onClose, onPick }: { language: Languag
   </div>;
 }
 
-function PreviewModal({ slides, start, language, onClose }: { slides: AdminSlide[]; start: number; language: Language; onClose: () => void }) {
+export function PreviewModal({ slides, start, language, onClose, startFullscreen = false }: { slides: AdminSlide[]; start: number; language: Language; onClose: () => void; startFullscreen?: boolean }) {
   const [index, setIndex] = useState(start);
   const [step, setStep] = useState(0);
   const fullscreen = useFullscreen();
+  // Opened from a click, so the browser still allows entering fullscreen here.
+  useEffect(() => { if (startFullscreen) fullscreen.toggle(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const slide = slides[index];
   const steps = stepCount(slide.doc);
 

@@ -49,7 +49,7 @@ Slides 5–7 are live screens. Slide 5 shows the challenge, room code, QR code a
 
 ## Training Studio (admin workspace)
 
-Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. Phase 1 includes the Dashboard and the Lesson Library: create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, and preview with reveal steps and fullscreen. Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The Weekly Planner, visual Slide Builder, live snapshots, and cross-session reports arrive in later phases; see `docs/STUDIO-PLAN.md`.
+Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. It includes the Dashboard, the Lesson Library (create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, preview) and the visual **Slide Builder** (drag, resize, snapping, inline text editing, shapes, windows, live widgets, layers, reveal steps, undo/redo, autosave with conflict handling, fullscreen preview). Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The Weekly Planner, visual Slide Builder, live snapshots, and cross-session reports arrive in later phases; see `docs/STUDIO-PLAN.md`.
 
 ## Checks
 
