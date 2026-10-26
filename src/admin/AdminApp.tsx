@@ -8,6 +8,7 @@ import Builder from "./Builder";
 import Library from "./Library";
 import LiveSessions from "./LiveSessions";
 import Planner from "./Planner";
+import { FeedbackReports, TrainingHistory } from "./Reports";
 
 type Section = "dashboard" | "planner" | "library" | "builder" | "live" | "feedback" | "history";
 
@@ -17,8 +18,8 @@ const SECTIONS: Array<{ id: Section; en: string; th: string; icon: ReactNode; ph
   { id: "library", en: "Lesson Library", th: "คลังบทเรียน", icon: <LibraryIcon size={17} /> },
   { id: "builder", en: "Slide Builder", th: "สร้างสไลด์", icon: <PanelsTopLeft size={17} /> },
   { id: "live", en: "Live Sessions", th: "ห้องเรียนสด", icon: <Radio size={17} /> },
-  { id: "feedback", en: "Feedback", th: "แบบสอบถาม", icon: <MessageSquareText size={17} />, phase: 5 },
-  { id: "history", en: "Training History", th: "ประวัติการอบรม", icon: <BarChart3 size={17} />, phase: 5 },
+  { id: "feedback", en: "Feedback", th: "แบบสอบถาม", icon: <MessageSquareText size={17} /> },
+  { id: "history", en: "Training History", th: "ประวัติการอบรม", icon: <BarChart3 size={17} /> },
 ];
 
 function readSection(): Section {
@@ -86,7 +87,7 @@ export default function AdminApp({ language, onLanguage, theme, onTheme, navigat
     </header>
     <nav className="admin-nav" aria-label={t(language, "Admin sections", "เมนูผู้ดูแล")}>
       {SECTIONS.map((item) => <button key={item.id} className={section === item.id ? "is-on" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => go(item.id)}>
-        {item.icon}{t(language, item.en, item.th)}{item.phase && <span className="phase-tag">P{item.phase}</span>}
+        {item.icon}{t(language, item.en, item.th)}
       </button>)}
     </nav>
     <section className="admin-main">
@@ -95,13 +96,8 @@ export default function AdminApp({ language, onLanguage, theme, onTheme, navigat
       {section === "builder" && <Builder language={language} lessonId={target.lessonId} slideId={target.slideId} onOpen={openBuilder} />}
       {section === "planner" && <Planner language={language} />}
       {section === "live" && <LiveSessions language={language} navigate={navigate} />}
-      {section === "feedback" && <Coming language={language} title="Feedback" phase={5} items={[
-        "Completion and average rating across sessions, with management-only individual answers",
-        "Today: each session's feedback is in Presenter → Feedback (status, CSV, answers)",
-      ]} />}
-      {section === "history" && <Coming language={language} title="Training History" phase={5} items={[
-        "Past sessions with their frozen slide snapshot, results and feedback exports",
-      ]} />}
+      {section === "feedback" && <FeedbackReports language={language} />}
+      {section === "history" && <TrainingHistory language={language} />}
     </section>
   </main>;
 }
@@ -158,12 +154,5 @@ function DashboardView({ language, go }: { language: Language; go: (section: Sec
       {data?.recent.length ? <ul className="log">{data.recent.map((row, index) => <li key={index}><span className="mono-dim">{new Date(row.createdAt).toLocaleString()}</span> <b>{row.action}</b></li>)}</ul>
         : <p className="mono-dim">{t(language, "> no admin activity yet", "> ยังไม่มีกิจกรรม")}</p>}
     </TerminalWindow>
-  </>;
-}
-
-function Coming({ language, title, phase, items, action }: { language: Language; title: string; phase: number; items: string[]; action?: ReactNode }) {
-  return <>
-    <div className="admin-title"><div><h1>{title}</h1><p>{t(language, `Arrives in Phase ${phase}.`, `จะมาในเฟส ${phase}`)}</p></div></div>
-    <TerminalWindow title={`phase-${phase}.md`} className="coming"><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul>{action}</TerminalWindow>
   </>;
 }

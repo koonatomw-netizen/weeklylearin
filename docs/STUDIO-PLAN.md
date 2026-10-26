@@ -1,6 +1,23 @@
 # 4Seas Training Studio — Assessment & Plan
 
-Status: **Phases 1–4 implemented** (approved with option A admin sessions; R2 planned for Phase 3). Phases 3–6 are still proposals unless marked delivered below.
+Status: **Phases 1–6 implemented locally** (approved with option A admin sessions). Production deployment and remote migrations have not been run.
+
+## Phase 6 — delivered locally
+
+- **Responsive pass:** admin report tables scroll horizontally on narrow screens; snapshot slide navigation changes to a horizontal strip; tag forms and feedback answer layouts collapse to one column on phones.
+- **Accessibility pass:** report/history controls use labelled buttons and navigation, the selected snapshot slide exposes `aria-current`, the admin sign-in and builder save states are announced, and the existing global `:focus-visible` treatment remains visible for keyboard users. Reduced-motion handling remains enabled.
+- **Load check:** `pnpm load-check` exercises 60 participant joins and 60 concurrent state reads against a local Worker. The latest run completed with join median/p95 404/406 ms and state median/p95 406/409 ms. This is a local single-machine check, not a production or real-device benchmark.
+- **Operator docs:** README describes the new admin reports and local load check; the pre-production checklist calls out migration `0005` and the checks to repeat before deployment.
+- **Production gate:** no remote database migration or deploy was performed.
+
+## Phase 5 — delivered
+
+- **Feedback:** new admin-only cross-session completion and average-rating report, per-session answer review, and combined CSV export with session/version metadata. The reports reuse the existing identified weekly feedback and preserve the existing admin-session guard.
+- **Training history:** session detail includes the frozen published deck with slide navigation and presenter notes, Prompt Battle outcomes and winners, and session feedback. Legacy rooms are identified as using the built-in deck where no JSON snapshot exists.
+- **Recurring issues:** admins can add and remove up to 12 session tags with short notes. Tags live in additive migration `0005_training_reports.sql` and do not change snapshots.
+- **Coverage:** `scripts/smoke-studio.mjs` covers report aggregation, protected session details, frozen deck and battle history, tag add/duplicate/remove, combined tag aggregation, and formula-safe combined CSV. It passes 95 assertions.
+
+---
 
 ## Phase 4 — delivered
 

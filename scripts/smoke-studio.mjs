@@ -112,6 +112,27 @@ hostState = (await ctl({ action: 'show_results' })).state;
 check(hostState.currentSlide === 4 && hostState.activity === 'results', 'Showing results jumps to the leaderboard widget slide.');
 log('live flow on a snapshot deck: writing → battle → results jump to the right slides');
 
+// --------------------------------------------------------- feedback/history
+await ctl({ action: 'start_feedback' });
+await request(`${root}/feedback`, { method: 'POST', token: people[0].participantToken, data: {
+  trainingRating: 5, workChallenges: 'Late check-in requests', supportNeeded: 'A clear policy card',
+  trainingRequests: 'Handling difficult requests', otherComments: '=HYPERLINK("https://example.com")',
+}, expected: 201 });
+const feedbackReport = (await request('/api/admin/feedback/report', { token: admin })).sessions.find((item) => item.code === session.roomCode);
+check(feedbackReport.responses === 1 && feedbackReport.participants === 5 && feedbackReport.averageRating === 5, 'Cross-session feedback report aggregates completion and ratings.');
+const history = (await request(`/api/admin/sessions/${session.roomCode}`, { token: admin })).session;
+check(history.deck.slides.length === 5 && history.feedback[0].workChallenges === 'Late check-in requests' && history.battles.find((battle) => battle.round === 'mini').entries.length === 4, 'History returns frozen slides, named feedback and battle outcomes to admins.');
+const tag = (await request(`/api/admin/sessions/${session.roomCode}/tags`, { method: 'POST', token: admin, data: { tag: 'check-in policy', note: 'Needs a clearer staff reference.' }, expected: 201 })).tags[0];
+check(tag.tag === 'check-in policy', 'History supports recurring-issue tags.');
+check((await request('/api/admin/issue-tags', { token: admin })).issues.some((issue) => issue.tag === 'check-in policy' && issue.sessions.some((item) => item.code === session.roomCode)), 'History groups manually tagged issues across sessions.');
+await request(`/api/admin/sessions/${session.roomCode}/tags`, { method: 'POST', token: admin, data: { tag: 'CHECK-IN POLICY' }, expected: 409 });
+await request(`/api/admin/sessions/${session.roomCode}/tags?id=${tag.id}`, { method: 'DELETE', token: admin });
+const csvResponse = await fetch(`${base}/api/admin/feedback.csv`, { headers: { Authorization: `Bearer ${admin}` } });
+const csv = await csvResponse.text();
+check(csvResponse.ok && csv.includes('Late check-in requests') && csv.includes('snapshot_version') && csv.includes("'=HYPERLINK"), 'Combined CSV contains session metadata, individual answers and formula-safe text.');
+await request('/api/admin/feedback/report', { token: 'nope', expected: 401 });
+log('Phase 5 reports: cross-session feedback, protected detail, snapshot replay data, outcomes, issue tags and combined CSV');
+
 // -------------------------------------------------- v2 and history safety
 const v2 = await request(`/api/admin/plans/${draft.id}/publish`, { method: 'POST', token: admin, expected: 201 });
 check(v2.snapshot.version === 2, 'Published v2.');

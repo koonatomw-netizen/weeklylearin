@@ -72,6 +72,120 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   }
   if (path === "/me" && method === "GET") return json({ ok: true });
 
+  if (path === "/feedback/report" && method === "GET") {
+    const rows = await db.prepare(`SELECT r.code, r.title, r.created_at, r.activity, t.version, t.plan_id,
+        (SELECT COUNT(*) FROM participants p WHERE p.room_code = r.code) AS participants,
+        (SELECT COUNT(*) FROM weekly_feedback f WHERE f.session_id = r.code) AS responses,
+        (SELECT AVG(f.training_rating) FROM weekly_feedback f WHERE f.session_id = r.code) AS average_rating
+      FROM rooms r LEFT JOIN training_snapshots t ON t.id = r.snapshot_id
+      ORDER BY r.created_at DESC LIMIT 500`)
+      .all<{ code: string; title: string; created_at: string; activity: string; version: number | null; plan_id: string | null; participants: number; responses: number; average_rating: number | null }>();
+    return json({ sessions: rows.results.map((row) => ({ code: row.code, title: row.title, createdAt: row.created_at,
+      activity: row.activity, version: row.version, planId: row.plan_id, participants: row.participants,
+      responses: row.responses, averageRating: row.average_rating === null ? null : Math.round(row.average_rating * 100) / 100 })) });
+  }
+
+  if (path === "/feedback.csv" && method === "GET") {
+    const rows = await db.prepare(`SELECT r.code, r.title, r.created_at, t.version, p.nickname,
+        f.training_rating, f.work_challenges, f.support_needed, f.training_requests, f.other_comments, f.submitted_at
+      FROM rooms r LEFT JOIN training_snapshots t ON t.id = r.snapshot_id
+      JOIN participants p ON p.room_code = r.code
+      LEFT JOIN weekly_feedback f ON f.session_id = r.code AND f.participant_id = p.id
+      ORDER BY r.created_at DESC, p.joined_at`)
+      .all<{ code: string; title: string; created_at: string; version: number | null; nickname: string; training_rating: number | null; work_challenges: string | null; support_needed: string | null; training_requests: string | null; other_comments: string | null; submitted_at: string | null }>();
+    const quote = (value: unknown) => {
+      let text = String(value ?? "");
+      if (/^[\s\u0000-\u001f]*[=+\-@]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const columns = ["session_code", "session_title", "started_at", "snapshot_version", "nickname", "feedback_status", "submitted_at", "training_rating", "work_challenges", "support_needed", "training_requests", "other_comments"];
+    const csvRows = rows.results.map((row) => [row.code, row.title, row.created_at, row.version ?? "", row.nickname,
+      row.submitted_at ? "submitted" : "pending", row.submitted_at ?? "", row.training_rating ?? "", row.work_challenges ?? "",
+      row.support_needed ?? "", row.training_requests ?? "", row.other_comments ?? ""]);
+    const csv = [columns, ...csvRows].map((row) => row.map(quote).join(",")).join("\r\n");
+    return new Response(`\uFEFF${csv}`, { headers: { "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="4seas-training-feedback.csv"', "Cache-Control": "no-store" } });
+  }
+
+  if (path === "/issue-tags" && method === "GET") {
+    const rows = await db.prepare(`SELECT i.tag, i.note, i.session_id, r.title, i.created_at
+      FROM session_issue_tags i JOIN rooms r ON r.code = i.session_id ORDER BY i.created_at DESC LIMIT 1200`)
+      .all<{ tag: string; note: string; session_id: string; title: string; created_at: string }>();
+    const groups = new Map<string, { tag: string; sessions: Array<{ code: string; title: string; note: string }>; latestAt: string }>();
+    for (const row of rows.results) {
+      const key = row.tag.trim().toLocaleLowerCase();
+      let group = groups.get(key);
+      if (!group) { group = { tag: row.tag, sessions: [], latestAt: row.created_at }; groups.set(key, group); }
+      group.sessions.push({ code: row.session_id, title: row.title, note: row.note });
+    }
+    return json({ issues: [...groups.values()].sort((a, b) => b.sessions.length - a.sessions.length || b.latestAt.localeCompare(a.latestAt)) });
+  }
+
+  const historyMatch = path.match(/^\/sessions\/([A-Z0-9]{6})(?:\/(tags))?$/i);
+  if (historyMatch) {
+    const code = historyMatch[1].toUpperCase();
+    const room = await db.prepare(`SELECT r.code, r.title, r.created_at, r.activity, r.snapshot_id, s.plan_id, s.version, s.published_at, s.deck_json
+      FROM rooms r LEFT JOIN training_snapshots s ON s.id = r.snapshot_id WHERE r.code = ?`).bind(code)
+      .first<{ code: string; title: string; created_at: string; activity: string; snapshot_id: string | null; plan_id: string | null; version: number | null; published_at: string | null; deck_json: string | null }>();
+    if (!room) throw new HttpError(404, "Training session not found.");
+    if (historyMatch[2] && method === "POST") {
+      const body = await readBody(request);
+      const tag = cleanLine(body.tag, 40, "Issue tag", true);
+      const note = cleanLine(body.note, 240, "Tag note");
+      const duplicate = await db.prepare("SELECT id FROM session_issue_tags WHERE session_id = ? AND lower(tag) = lower(?)").bind(code, tag).first<{ id: string }>();
+      if (duplicate) throw new HttpError(409, "That tag is already on this session.");
+      const count = await db.prepare("SELECT COUNT(*) AS count FROM session_issue_tags WHERE session_id = ?").bind(code).first<{ count: number }>();
+      if ((count?.count ?? 0) >= 12) throw new HttpError(409, "A session can have at most 12 issue tags.");
+      try {
+        await db.batch([
+          db.prepare("INSERT INTO session_issue_tags (id, session_id, tag, note, created_at) VALUES (?, ?, ?, ?, ?)")
+            .bind(crypto.randomUUID(), code, tag, note, new Date().toISOString()),
+          audit("session.tag.add", { roomCode: code, tag }),
+        ]);
+      } catch (error) {
+        if (String(error).includes("UNIQUE")) throw new HttpError(409, "That tag is already on this session.");
+        throw error;
+      }
+      return json({ tags: await sessionTags(db, code) }, 201);
+    }
+    const tagDelete = historyMatch[2] && path.match(/^\/sessions\/([A-Z0-9]{6})\/tags$/i);
+    if (tagDelete && method === "DELETE") {
+      const tagId = url.searchParams.get("id") ?? "";
+      await db.batch([
+        db.prepare("DELETE FROM session_issue_tags WHERE id = ? AND session_id = ?").bind(tagId, code),
+        audit("session.tag.delete", { roomCode: code, tagId }),
+      ]);
+      return json({ tags: await sessionTags(db, code) });
+    }
+    if (!historyMatch[2] && method === "GET") {
+      const [people, feedback, battles, tags] = await Promise.all([
+        db.prepare("SELECT COUNT(*) AS count FROM participants WHERE room_code = ?").bind(code).first<{ count: number }>(),
+        db.prepare(`SELECT p.nickname, f.training_rating, f.work_challenges, f.support_needed, f.training_requests, f.other_comments, f.submitted_at
+          FROM weekly_feedback f JOIN participants p ON p.id = f.participant_id WHERE f.session_id = ? ORDER BY f.submitted_at`).bind(code)
+          .all<{ nickname: string; training_rating: number; work_challenges: string; support_needed: string; training_requests: string; other_comments: string; submitted_at: string }>(),
+        db.prepare(`SELECT b.id, b.round, b.sequence, b.status, b.resolution_note, e.display_order, e.is_winner, p.nickname, ps.prompt_text,
+            (SELECT COUNT(*) FROM votes v WHERE v.entry_id = e.id) AS votes
+          FROM battles b LEFT JOIN battle_entries e ON e.battle_id = b.id
+          LEFT JOIN participants p ON p.id = e.participant_id LEFT JOIN prompt_submissions ps ON ps.id = e.submission_id
+          WHERE b.room_code = ? ORDER BY b.round, b.sequence, e.display_order`).bind(code)
+          .all<{ id: string; round: string; sequence: number; status: string; resolution_note: string; display_order: number | null; is_winner: number | null; nickname: string | null; prompt_text: string | null; votes: number | null }>(),
+        sessionTags(db, code),
+      ]);
+      const grouped = new Map<string, { id: string; round: string; sequence: number; status: string; resolutionNote: string; entries: Array<{ nickname: string; prompt: string; votes: number; winner: boolean }> }>();
+      for (const row of battles.results) {
+        let battle = grouped.get(row.id);
+        if (!battle) { battle = { id: row.id, round: row.round, sequence: row.sequence, status: row.status, resolutionNote: row.resolution_note, entries: [] }; grouped.set(row.id, battle); }
+        if (row.nickname !== null) battle.entries.push({ nickname: row.nickname, prompt: row.prompt_text ?? "", votes: row.votes ?? 0, winner: Boolean(row.is_winner) });
+      }
+      return json({ session: { code: room.code, title: room.title, createdAt: room.created_at, activity: room.activity,
+        participants: people?.count ?? 0, snapshotId: room.snapshot_id, planId: room.plan_id, version: room.version,
+        publishedAt: room.published_at, deck: room.deck_json ? JSON.parse(room.deck_json) : null,
+        feedback: feedback.results.map((row) => ({ nickname: row.nickname, trainingRating: row.training_rating,
+          workChallenges: row.work_challenges, supportNeeded: row.support_needed, trainingRequests: row.training_requests,
+          otherComments: row.other_comments, submittedAt: row.submitted_at })), battles: [...grouped.values()], tags } });
+    }
+  }
+
   if (path === "/dashboard" && method === "GET") {
     const [lessons, slides, rooms, feedback, recent] = await db.batch([
       db.prepare("SELECT COUNT(*) AS count FROM lessons WHERE archived_at IS NULL"),
@@ -331,6 +445,12 @@ async function getLesson(env: Env, id: string) {
   const row = (lesson.results as LessonRow[])[0];
   if (!row) throw new HttpError(404, "Lesson not found.");
   return { ...lessonView(row), slides: (slides.results as SlideRow[]).map(slideView) };
+}
+
+async function sessionTags(db: D1Database, code: string): Promise<Array<{ id: string; tag: string; note: string; createdAt: string }>> {
+  const rows = await db.prepare("SELECT id, tag, note, created_at FROM session_issue_tags WHERE session_id = ? ORDER BY created_at, tag")
+    .bind(code).all<{ id: string; tag: string; note: string; created_at: string }>();
+  return rows.results.map((row) => ({ id: row.id, tag: row.tag, note: row.note, createdAt: row.created_at }));
 }
 
 async function login(request: Request, env: Env): Promise<Response> {

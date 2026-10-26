@@ -15,6 +15,7 @@
     "smoke": "node scripts/smoke-room.mjs",
     "smoke:admin": "node scripts/smoke-admin.mjs",
     "smoke:studio": "node scripts/smoke-studio.mjs",
+    "load-check": "node scripts/load-check.mjs",
     "preview": "pnpm build && wrangler dev --ip 0.0.0.0 --port 8787",
     "db:migrate:remote": "wrangler d1 migrations apply 4seas-training --remote",
     "deploy": "pnpm build && wrangler deploy"

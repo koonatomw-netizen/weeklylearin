@@ -765,6 +765,41 @@ blockquote.prompt-text { margin: 0; padding: 10px 12px; border-left: 3px solid v
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .coming { display: flex; flex-direction: column; gap: 10px; max-width: 720px; }
 .coming ul { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; list-style: disc; color: var(--text-2); font-size: 14px; }
+.table-scroll { width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.table-scroll .data-table { min-width: 700px; }
+.report-subtitle { font-family: var(--mono); font-size: 17px; margin-bottom: 12px; }
+.answer-list, .battle-review-list { display: grid; gap: 12px; }
+.answer-card, .battle-review { padding: 14px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+.answer-card > header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.answer-card > header .mono-dim { margin-left: auto; }
+.answer-card dl { display: grid; grid-template-columns: minmax(130px, 190px) minmax(0, 1fr); gap: 8px 14px; margin-top: 12px; }
+.answer-card dt { color: var(--text-2); font-size: 13px; }
+.answer-card dd { overflow-wrap: anywhere; white-space: pre-wrap; }
+.rating-pill { padding: 2px 8px; border-radius: 999px; color: var(--accent-text); background: var(--accent-soft); font-family: var(--mono); }
+.history-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.history-summary h2 { font-size: 19px; }
+.history-preview { display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.history-slide-list { display: flex; flex-direction: column; gap: 4px; max-height: 440px; overflow: auto; }
+.history-slide-list button { padding: 8px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-2); text-align: left; }
+.history-slide-list button:hover, .history-slide-list button.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.history-preview h3 { margin-bottom: 8px; }
+.history-preview .stage { aspect-ratio: 16 / 9; }
+.battle-review h3 { margin-bottom: 10px; text-transform: capitalize; }
+.battle-review-entry { padding: 10px; border-top: 1px solid var(--border-soft); }
+.battle-review-entry.is-winner { border-left: 3px solid var(--success); }
+.battle-review-entry > span { float: right; }
+.battle-review-entry p { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-2); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.issue-tag { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 5px 8px 5px 11px; border: 1px solid var(--border); border-radius: 999px; }
+.issue-tag > span { color: var(--text-2); overflow-wrap: anywhere; }
+.issue-tag .icon-button { width: 28px; height: 28px; }
+.recurring-issue-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.recurring-issue { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+.recurring-issue > header { display: flex; justify-content: space-between; gap: 8px; }
+.recurring-issue > div { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.recurring-issue .link-button { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.issue-tag-form { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(160px, 2fr) auto; gap: 10px; align-items: end; }
+.issue-tag-form .field { min-width: 0; }
 
 .library { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 18px; align-items: start; }
 .lesson-list { display: flex; flex-direction: column; gap: 6px; }
@@ -923,6 +958,16 @@ blockquote.prompt-text { margin: 0; padding: 10px 12px; border-left: 3px solid v
   .admin-main { padding: 16px 12px 40px; }
   .library { grid-template-columns: 1fr; }
   .lesson-head { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 680px) {
+  .history-preview { grid-template-columns: 1fr; }
+  .history-slide-list { flex-direction: row; max-height: none; overflow-x: auto; padding-bottom: 4px; }
+  .history-slide-list button { min-width: 130px; }
+  .issue-tag-form { grid-template-columns: 1fr; }
+  .answer-card dl { grid-template-columns: 1fr; gap: 4px; }
+  .answer-card dd { margin-bottom: 8px; }
+  .history-summary { flex-direction: column; }
 }
 
 /* ------------------------------------------------------------ responsive */

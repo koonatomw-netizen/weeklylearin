@@ -49,7 +49,7 @@ Slides 5–7 are live screens. Slide 5 shows the challenge, room code, QR code a
 
 ## Training Studio (admin workspace)
 
-Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. It includes the Dashboard, the Lesson Library (create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, preview) and the visual **Slide Builder** (drag, resize, snapping, inline text editing, shapes, windows, live widgets, **images and background images** stored in R2, layers, reveal steps, undo/redo, autosave with conflict handling, fullscreen preview). Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The **Weekly Planner** assembles a session from library slides plus that week's Prompt Battle challenge. **Publishing** freezes a versioned snapshot, and **Live Sessions** starts a room from it: Presenter Mode and the projector then show those exact slides, with live widgets (QR and code, stats, challenge, battle, leaderboard, feedback completion) wired to the room. Later edits to the library never change a published version or a running room. Rooms created from the home page still use the built-in Week 01 deck. Cross-session reports and history arrive in Phase 5; see `docs/STUDIO-PLAN.md`.
+Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. It includes the Dashboard, the Lesson Library (create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, preview) and the visual **Slide Builder** (drag, resize, snapping, inline text editing, shapes, windows, live widgets, **images and background images** stored in R2, layers, reveal steps, undo/redo, autosave with conflict handling, fullscreen preview). Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The **Weekly Planner** assembles a session from library slides plus that week's Prompt Battle challenge. **Publishing** freezes a versioned snapshot, and **Live Sessions** starts a room from it: Presenter Mode and the projector then show those exact slides, with live widgets (QR and code, stats, challenge, battle, leaderboard, feedback completion) wired to the room. Later edits to the library never change a published version or a running room. Rooms created from the home page still use the built-in Week 01 deck. **Feedback** summarizes completion and ratings across sessions, permits authorised admins to review answers, and exports a combined CSV. **Training History** replays frozen slide snapshots, reviews battle outcomes and feedback, and records recurring issue tags. These reports require an admin session.
 
 ## Checks
 
@@ -59,14 +59,17 @@ Open `/?view=admin` (or use the link at the bottom of the home page) and sign in
 - `pnpm smoke` runs the end-to-end HTTP + WebSocket workflow against a **local** `wrangler dev`. Set `SMOKE_HOST_PASSPHRASE` first. It refuses to run against non-local hosts.
 - `pnpm smoke:studio` runs the planner, publishing, snapshot-stability and snapshot-room checks (needs both `SMOKE_ADMIN_PASSPHRASE` and `SMOKE_HOST_PASSPHRASE`).
 - `pnpm smoke:admin` runs the admin API checks (auth, lessons, slides, validation, version conflicts, reorder, seed) against local `wrangler dev`. Set `SMOKE_ADMIN_PASSPHRASE` first.
+- `pnpm load-check` creates a local room, joins 60 participants, then runs 60 concurrent state reads. Set `SMOKE_HOST_PASSPHRASE`; it refuses non-local URLs and leaves fixtures in local D1.
 
 ## Deploy to Cloudflare
 
 Nothing has been deployed yet. `wrangler.jsonc` still holds a placeholder `database_id`.
 
+Before a first production rollout, run `pnpm check`, the local `pnpm smoke`, `pnpm smoke:admin`, `pnpm smoke:studio`, and `pnpm load-check`; then verify the flows with a real phone and projector. The local load check is a basic capacity signal, not a substitute for production traffic testing.
+
 1. `npx wrangler login`
 2. Create the production database (first deploy only): `npx wrangler d1 create 4seas-training`, then copy the printed `database_id` into `wrangler.jsonc`. For slide images, enable R2 on the account (Cloudflare requires a payment method even for the free tier) and run `npx wrangler r2 bucket create 4seas-training-assets`.
-3. Apply migrations: `pnpm db:migrate:remote`. `0002` and `0003` are additive: they only add tables, triggers, and columns, so existing rooms and legacy submissions are kept. Back up first with `npx wrangler d1 export 4seas-training --remote --output backup.sql`.
+3. Back up first with `npx wrangler d1 export 4seas-training --remote --output backup.sql`, then apply migrations with `pnpm db:migrate:remote`. Migrations `0002`–`0005` are additive; `0005` adds admin-only issue tags and leaves existing room data and published snapshots intact.
 4. Set the passphrases as secrets: `npx wrangler secret put HOST_PASSPHRASE` and `npx wrangler secret put ADMIN_PASSPHRASE` (use different values).
 5. `pnpm deploy` builds the SPA into `dist/` and deploys the Worker, assets, and the `RoomHub` Durable Object.
 6. Open the `*.workers.dev` URL (or attach a custom domain in the dashboard), create a room, and test with a phone.
@@ -76,14 +79,14 @@ Free-plan notes: D1 and SQLite-backed Durable Objects are both available on the 
 ## Project structure
 
 ```
-migrations/            0001_init.sql (original) · 0002_prompt_battle.sql · 0003_weekly_feedback.sql (both additive)
+migrations/            0001_init.sql · 0002_prompt_battle.sql · 0003_weekly_feedback.sql · 0004_training_studio.sql · 0005_training_reports.sql
 src/shared/            types.ts · battle.ts (grouping, scoring, ranking) · challenge.ts (Week 01 content)
 src/worker/            index.ts (routing, room creation) · room-hub.ts (Durable Object: rules, voting, export) · view.ts (per-role state)
 src/slides/Deck.tsx    16:9 canvas and the 7 native slides
 src/PresenterScreen.tsx · ProjectorScreen.tsx · ParticipantScreen.tsx · FeedbackForm.tsx · Landing.tsx · JoinScreen.tsx
 src/ui.tsx · theme.ts · useRoom.ts · api.ts · styles.css
 tests/                 Vitest unit tests
-scripts/smoke-room.mjs End-to-end local workflow test
+scripts/               smoke-room.mjs · smoke-admin.mjs · smoke-studio.mjs · load-check.mjs
 legacy/                Retired AI scoring, slide-template editor and old planning docs (not built)
 docs/REFACTOR.md       Audit, plan and change summary
 ```

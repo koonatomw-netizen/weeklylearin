@@ -17,6 +17,16 @@ export interface AdminPlanDetail extends AdminPlan {
   snapshots: Array<{ id: string; version: number; publishedAt: string; bytes: number }>;
 }
 export interface AdminSession { code: string; title: string; createdAt: string; activity: string; snapshotId: string | null; version: number | null; planId: string | null; participants: number; feedback: number }
+export interface FeedbackReportRow extends Omit<AdminSession, "snapshotId" | "feedback"> { responses: number; averageRating: number | null }
+export interface SessionTag { id: string; tag: string; note: string; createdAt: string }
+export interface RecurringIssue { tag: string; latestAt: string; sessions: Array<{ code: string; title: string; note: string }> }
+export interface SessionHistory {
+  code: string; title: string; createdAt: string; activity: string; participants: number; snapshotId: string | null;
+  planId: string | null; version: number | null; publishedAt: string | null; deck: PublishedDeck | null;
+  feedback: Array<{ nickname: string; trainingRating: number; workChallenges: string; supportNeeded: string; trainingRequests: string; otherComments: string; submittedAt: string }>;
+  battles: Array<{ id: string; round: string; sequence: number; status: string; resolutionNote: string; entries: Array<{ nickname: string; prompt: string; votes: number; winner: boolean }> }>;
+  tags: SessionTag[];
+}
 export interface AdminAsset { id: string; mime: string; bytes: number; width: number | null; height: number | null; createdAt: string }
 export interface Dashboard { lessons: number; slides: number; sessions: number; feedback: number; recent: Array<{ action: string; createdAt: string }> }
 
@@ -78,6 +88,18 @@ export const adminApi = {
   snapshot: (id: string) => call<{ snapshot: { id: string; publishedAt: string; deck: PublishedDeck } }>(`/snapshots/${id}`),
   startSession: (snapshotId: string) => call<{ roomCode: string; hostToken: string; title: string }>(`/snapshots/${snapshotId}/session`, send("POST")),
   sessions: () => call<{ sessions: AdminSession[] }>("/sessions"),
+  feedbackReport: () => call<{ sessions: FeedbackReportRow[] }>("/feedback/report"),
+  recurringIssues: () => call<{ issues: RecurringIssue[] }>("/issue-tags"),
+  sessionHistory: (code: string) => call<{ session: SessionHistory }>(`/sessions/${code}`),
+  addSessionTag: (code: string, data: { tag: string; note?: string }) => call<{ tags: SessionTag[] }>(`/sessions/${code}/tags`, send("POST", data)),
+  deleteSessionTag: (code: string, id: string) => call<{ tags: SessionTag[] }>(`/sessions/${code}/tags?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
+  downloadFeedbackCsv: async () => {
+    const token = adminToken.get();
+    const response = await fetch("/api/admin/feedback.csv", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (response.status === 401) { adminToken.set(null); window.dispatchEvent(new Event(SESSION_ENDED)); }
+    if (!response.ok) throw new ApiError("The feedback export could not be downloaded.", response.status);
+    return response.blob();
+  },
   assets: () => call<{ assets: AdminAsset[] }>("/assets"),
   uploadAsset: (file: File) => call<{ asset: AdminAsset; deduplicated: boolean }>("/assets", { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } }),
   deleteAsset: (id: string) => call<{ ok: true }>(`/assets/${id}`, { method: "DELETE" }),
