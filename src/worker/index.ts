@@ -1,4 +1,5 @@
 import { SESSION_TITLE } from "../shared/challenge";
+import { handleAdmin } from "./admin";
 import { RoomHub, makeRoomCode, randomSecret, sha256, type Env } from "./room-hub";
 
 function json(data: unknown, status = 200): Response {
@@ -58,6 +59,7 @@ async function fetchHandler(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/api/config" && request.method === "GET") return json({ hostReady: Boolean(env.HOST_PASSPHRASE) });
   if (url.pathname === "/api/rooms" && request.method === "POST") return createRoom(request, env);
+  if (url.pathname.startsWith("/api/admin/")) return handleAdmin(request, env, url);
   const roomMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{6})\/([a-z]+)$/i);
   if (roomMatch) {
     const roomCode = roomMatch[1].toUpperCase();

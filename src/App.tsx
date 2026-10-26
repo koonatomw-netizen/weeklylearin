@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { getConfig, tokens } from "./api";
 import JoinScreen from "./JoinScreen";
 import Landing from "./Landing";
@@ -8,6 +8,9 @@ import ProjectorScreen from "./ProjectorScreen";
 import type { Language } from "./shared/types";
 import { useTheme } from "./theme";
 import { Brand, Notice, t } from "./ui";
+
+// The admin workspace is a separate chunk so phones never download the editor.
+const AdminApp = lazy(() => import("./admin/AdminApp"));
 
 interface PageLocation { view: string; room: string }
 
@@ -20,7 +23,7 @@ export default function App() {
   const [page, setPage] = useState<PageLocation>(readLocation);
   const [language, setLanguage] = useState<Language>(() => { try { return localStorage.getItem("4seas:language") === "th" ? "th" : "en"; } catch { return "en"; } });
   const [hostReady, setHostReady] = useState<boolean | null>(null);
-  const presenterView = page.view === "host" || page.view === "projector";
+  const presenterView = page.view === "host" || page.view === "projector" || page.view === "admin";
   const { theme, toggle } = useTheme(presenterView ? "dark" : undefined);
 
   useEffect(() => {
@@ -46,6 +49,9 @@ export default function App() {
   const common = { language, onLanguage: changeLanguage, theme, onTheme: toggle, navigate };
   const code = page.room;
 
+  if (page.view === "admin") {
+    return <Suspense fallback={<main className="center-page"><Brand /><p className="mono-dim">loading training studio…</p></main>}><AdminApp {...common} /></Suspense>;
+  }
   if (presenterView && code) {
     const hostToken = tokens.host(code);
     if (!hostToken) return <main className="center-page"><Brand /><Notice>{t(language, "This browser does not hold presenter access for that room. Create a room from the home page.", "เบราว์เซอร์นี้ไม่มีสิทธิ์ผู้สอนของห้องนี้ กรุณาสร้างห้องจากหน้าแรก")}</Notice><button className="btn" onClick={() => navigate("/")}>{t(language, "Home", "หน้าแรก")}</button></main>;

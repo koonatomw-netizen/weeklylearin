@@ -47,12 +47,17 @@ Slides 5–7 are live screens. Slide 5 shows the challenge, room code, QR code a
 - **Battle Score = votes received ÷ eligible voters × 100**. Eligible voters means everyone in the room except that battle's competitors, frozen when voting closes. Raw votes and votes cast are shown alongside. Ties share a rank.
 - Mini-battle ties: every tied leader advances. Grand Final ties: run a tie-break round, accept shared winners, or resolve manually. With a single finalist, that finalist wins by default. A battle with zero eligible voters is flagged and must be resolved manually with a recorded reason.
 
+## Training Studio (admin workspace)
+
+Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. Phase 1 includes the Dashboard and the Lesson Library: create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, and preview with reveal steps and fullscreen. Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The Weekly Planner, visual Slide Builder, live snapshots, and cross-session reports arrive in later phases; see `docs/STUDIO-PLAN.md`.
+
 ## Checks
 
 - `pnpm test` runs unit tests for grouping, scoring, ranking, and per-role visibility.
 - `pnpm typecheck:worker` typechecks the Worker and Durable Object.
 - `pnpm build` typechecks and builds the browser app.
 - `pnpm smoke` runs the end-to-end HTTP + WebSocket workflow against a **local** `wrangler dev`. Set `SMOKE_HOST_PASSPHRASE` first. It refuses to run against non-local hosts.
+- `pnpm smoke:admin` runs the admin API checks (auth, lessons, slides, validation, version conflicts, reorder, seed) against local `wrangler dev`. Set `SMOKE_ADMIN_PASSPHRASE` first.
 
 ## Deploy to Cloudflare
 
@@ -61,7 +66,7 @@ Nothing has been deployed yet. `wrangler.jsonc` still holds a placeholder `datab
 1. `npx wrangler login`
 2. Create the production database (first deploy only): `npx wrangler d1 create 4seas-training`, then copy the printed `database_id` into `wrangler.jsonc`.
 3. Apply migrations: `pnpm db:migrate:remote`. `0002` and `0003` are additive: they only add tables, triggers, and columns, so existing rooms and legacy submissions are kept. Back up first with `npx wrangler d1 export 4seas-training --remote --output backup.sql`.
-4. Set the presenter passphrase as a secret: `npx wrangler secret put HOST_PASSPHRASE`
+4. Set the passphrases as secrets: `npx wrangler secret put HOST_PASSPHRASE` and `npx wrangler secret put ADMIN_PASSPHRASE` (use different values).
 5. `pnpm deploy` builds the SPA into `dist/` and deploys the Worker, assets, and the `RoomHub` Durable Object.
 6. Open the `*.workers.dev` URL (or attach a custom domain in the dashboard), create a room, and test with a phone.
 

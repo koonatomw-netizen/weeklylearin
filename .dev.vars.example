@@ -2,4 +2,8 @@
 # In production set it as a Worker secret instead:  npx wrangler secret put HOST_PASSPHRASE
 HOST_PASSPHRASE=change-this-local-passphrase
 
+# Training Studio admin workspace (?view=admin). Use a different, longer value than the presenter passphrase.
+# Production:  npx wrangler secret put ADMIN_PASSPHRASE
+ADMIN_PASSPHRASE=change-this-admin-passphrase
+
 # No AI provider keys are needed. Prompt Battle uses peer voting only.

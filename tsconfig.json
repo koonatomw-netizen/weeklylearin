@@ -18,5 +18,5 @@
     "types": ["vite/client", "vitest/globals"]
   },
   "include": ["src", "vite.config.ts", "tests"],
-  "exclude": ["src/worker/index.ts", "src/worker/room-hub.ts"]
+  "exclude": ["src/worker/index.ts", "src/worker/room-hub.ts", "src/worker/admin.ts"]
 }

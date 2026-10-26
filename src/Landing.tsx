@@ -91,6 +91,6 @@ export default function Landing({ language, onLanguage, theme, onTheme, hostRead
       </TerminalWindow>
     </section>
 
-    <footer className="landing-foot mono-dim">{t(language, "No AI judge — the room decides by vote.", "ไม่มี AI ตัดสิน — ทุกคนในห้องโหวตตัดสินเอง")}</footer>
+    <footer className="landing-foot mono-dim">{t(language, "No AI judge — the room decides by vote.", "ไม่มี AI ตัดสิน — ทุกคนในห้องโหวตตัดสินเอง")} · <button className="link-button" style={{ display: "inline-flex" }} onClick={() => navigate("/?view=admin")}>{t(language, "Training Studio (admin)", "Training Studio (ผู้ดูแล)")}</button></footer>
   </main>;
 }

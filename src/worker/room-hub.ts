@@ -15,6 +15,7 @@ export interface Env {
   ROOMS: DurableObjectNamespace;
   ASSETS: Fetcher;
   HOST_PASSPHRASE?: string;
+  ADMIN_PASSPHRASE?: string;
 }
 
 interface Ticket { role: Role; participantId?: string; expiresAt: number }
