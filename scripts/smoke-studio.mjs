@@ -104,8 +104,17 @@ check(hostState.currentSlide === 3 && hostState.battles.length === 1, 'Generatin
 await ctl({ action: 'open_voting' });
 const battle = hostState.battles[0];
 await request(`${root}/vote`, { method: 'POST', token: people[4].participantToken, data: { battleId: battle.id, entryId: battle.entries[0].id, requestId: randomUUID() }, expected: 201 });
+// Admin history must follow the live room's rule: nothing about authors or votes before Reveal.
+const openHistory = (await request(`/api/admin/sessions/${session.roomCode}`, { token: admin })).session.battles.find((item) => item.id === battle.id);
+check(openHistory.status === 'open' && !openHistory.revealed && openHistory.entries.length === 4, 'History lists the open battle and its prompts.');
+check(openHistory.entries.every((entry) => entry.nickname === null && entry.votes === null && entry.winner === false), 'History hides authors, votes and winners while voting is open.');
+check(!JSON.stringify(openHistory).match(/"(Ann|Bo|Cy|Di)"/), 'No participant names leak through the open battle in history.');
 await ctl({ action: 'close_voting' });
+const closedHistory = (await request(`/api/admin/sessions/${session.roomCode}`, { token: admin })).session.battles.find((item) => item.id === battle.id);
+check(closedHistory.status === 'closed' && closedHistory.entries.every((entry) => entry.nickname === null && entry.votes === null), 'History still hides results after voting closes, until Reveal.');
 await ctl({ action: 'reveal' });
+const revealedHistory = (await request(`/api/admin/sessions/${session.roomCode}`, { token: admin })).session.battles.find((item) => item.id === battle.id);
+check(revealedHistory.revealed && revealedHistory.entries.every((entry) => typeof entry.nickname === 'string') && revealedHistory.entries.reduce((sum, entry) => sum + entry.votes, 0) === 1, 'After Reveal, history shows authors and the vote count.');
 hostState = (await ctl({ action: 'start_final' })).state;
 check(hostState.finalStatus === 'complete', 'Single finalist wins by default.');
 hostState = (await ctl({ action: 'show_results' })).state;

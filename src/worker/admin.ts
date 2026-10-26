@@ -167,15 +167,21 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
             (SELECT COUNT(*) FROM votes v WHERE v.entry_id = e.id) AS votes
           FROM battles b LEFT JOIN battle_entries e ON e.battle_id = b.id
           LEFT JOIN participants p ON p.id = e.participant_id LEFT JOIN prompt_submissions ps ON ps.id = e.submission_id
-          WHERE b.room_code = ? ORDER BY b.round, b.sequence, e.display_order`).bind(code)
+          WHERE b.room_code = ? ORDER BY CASE b.round WHEN 'mini' THEN 0 ELSE 1 END, b.sequence, e.display_order`).bind(code)
           .all<{ id: string; round: string; sequence: number; status: string; resolution_note: string; display_order: number | null; is_winner: number | null; nickname: string | null; prompt_text: string | null; votes: number | null }>(),
         sessionTags(db, code),
       ]);
-      const grouped = new Map<string, { id: string; round: string; sequence: number; status: string; resolutionNote: string; entries: Array<{ nickname: string; prompt: string; votes: number; winner: boolean }> }>();
+      const grouped = new Map<string, { id: string; round: string; sequence: number; status: string; revealed: boolean; resolutionNote: string; entries: Array<{ nickname: string | null; prompt: string; votes: number | null; winner: boolean }> }>();
       for (const row of battles.results) {
         let battle = grouped.get(row.id);
-        if (!battle) { battle = { id: row.id, round: row.round, sequence: row.sequence, status: row.status, resolutionNote: row.resolution_note, entries: [] }; grouped.set(row.id, battle); }
-        if (row.nickname !== null) battle.entries.push({ nickname: row.nickname, prompt: row.prompt_text ?? "", votes: row.votes ?? 0, winner: Boolean(row.is_winner) });
+        const revealed = row.status === "revealed";
+        if (!battle) { battle = { id: row.id, round: row.round, sequence: row.sequence, status: row.status, revealed, resolutionNote: row.resolution_note, entries: [] }; grouped.set(row.id, battle); }
+        if (row.nickname === null) continue;
+        // Same rule as the live room: authors, vote counts and winners stay hidden from everyone,
+        // admins included, until the presenter reveals the battle.
+        battle.entries.push(revealed
+          ? { nickname: row.nickname, prompt: row.prompt_text ?? "", votes: row.votes ?? 0, winner: Boolean(row.is_winner) }
+          : { nickname: null, prompt: row.prompt_text ?? "", votes: null, winner: false });
       }
       return json({ session: { code: room.code, title: room.title, createdAt: room.created_at, activity: room.activity,
         participants: people?.count ?? 0, snapshotId: room.snapshot_id, planId: room.plan_id, version: room.version,

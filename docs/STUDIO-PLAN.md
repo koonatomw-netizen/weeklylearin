@@ -15,7 +15,8 @@ Status: **Phases 1–6 implemented locally** (approved with option A admin sessi
 - **Feedback:** new admin-only cross-session completion and average-rating report, per-session answer review, and combined CSV export with session/version metadata. The reports reuse the existing identified weekly feedback and preserve the existing admin-session guard.
 - **Training history:** session detail includes the frozen published deck with slide navigation and presenter notes, Prompt Battle outcomes and winners, and session feedback. Legacy rooms are identified as using the built-in deck where no JSON snapshot exists.
 - **Recurring issues:** admins can add and remove up to 12 session tags with short notes. Tags live in additive migration `0005_training_reports.sql` and do not change snapshots.
-- **Coverage:** `scripts/smoke-studio.mjs` covers report aggregation, protected session details, frozen deck and battle history, tag add/duplicate/remove, combined tag aggregation, and formula-safe combined CSV. It passes 95 assertions.
+- **Coverage:** `scripts/smoke-studio.mjs` covers report aggregation, protected session details, frozen deck and battle history, tag add/duplicate/remove, combined tag aggregation, and formula-safe combined CSV. It passes 103 assertions.
+- **Results stay hidden until Reveal in history too:** for battles that are open, closed-but-unrevealed or pending, the session history returns prompts only. Authors, vote counts and winners are omitted for admins as well, matching the live-room rule. The smoke test checks this while voting is open, after it closes, and after Reveal.
 
 ---
 

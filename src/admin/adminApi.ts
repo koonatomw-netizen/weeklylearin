@@ -24,7 +24,8 @@ export interface SessionHistory {
   code: string; title: string; createdAt: string; activity: string; participants: number; snapshotId: string | null;
   planId: string | null; version: number | null; publishedAt: string | null; deck: PublishedDeck | null;
   feedback: Array<{ nickname: string; trainingRating: number; workChallenges: string; supportNeeded: string; trainingRequests: string; otherComments: string; submittedAt: string }>;
-  battles: Array<{ id: string; round: string; sequence: number; status: string; resolutionNote: string; entries: Array<{ nickname: string; prompt: string; votes: number; winner: boolean }> }>;
+  /** Unrevealed battles carry prompts only: nickname and votes are null until the presenter reveals. */
+  battles: Array<{ id: string; round: string; sequence: number; status: string; revealed: boolean; resolutionNote: string; entries: Array<{ nickname: string | null; prompt: string; votes: number | null; winner: boolean }> }>;
   tags: SessionTag[];
 }
 export interface AdminAsset { id: string; mime: string; bytes: number; width: number | null; height: number | null; createdAt: string }
