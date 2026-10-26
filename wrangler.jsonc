@@ -17,6 +17,12 @@
       "migrations_dir": "./migrations"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "ASSET_BUCKET",
+      "bucket_name": "4seas-training-assets"
+    }
+  ],
   "durable_objects": {
     "bindings": [{ "name": "ROOMS", "class_name": "RoomHub" }]
   },

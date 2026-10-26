@@ -1,3 +1,4 @@
+import { fitWithin } from "../shared/imageInfo";
 import { CANVAS_H, CANVAS_W, type ColorToken, type Paragraph, type SlideDoc, type SlideElement, type WidgetKind } from "../shared/slideDoc";
 
 /** Pure, testable operations used by the Slide Builder. Every function returns a new document. */
@@ -205,6 +206,12 @@ export function newElement(kind: NewElementKind, makeId = makeElementId): SlideE
     case "window": return { ...centred(900, 500), type: "window", title: "window.txt" };
     default: return { ...centred(kind === "battle" || kind === "leaderboard" ? 1200 : 640, kind === "live-stats" ? 140 : 420), type: "widget", widget: kind };
   }
+}
+
+/** An image element sized to the picture's aspect ratio (at most 1000×600), centred. */
+export function imageElement(asset: { id: string; width: number | null; height: number | null }, makeId = makeElementId): SlideElement {
+  const { w, h } = fitWithin(asset.width, asset.height, 1000, 600);
+  return { id: makeId(), type: "image", assetId: asset.id, fit: "cover", alt: "", x: Math.round((CANVAS_W - w) / 2), y: Math.round((CANVAS_H - h) / 2), w, h };
 }
 
 export function addElement(doc: SlideDoc, element: SlideElement): SlideDoc {

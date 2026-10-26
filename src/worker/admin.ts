@@ -1,3 +1,4 @@
+import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, detectImage } from "../shared/imageInfo";
 import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDoc";
 import { TEMPLATE_IDS, createFromTemplate, week01Lesson, type TemplateId } from "../shared/templates";
 import { randomSecret, sha256, type Env } from "./room-hub";
@@ -35,6 +36,7 @@ function cleanLine(value: unknown, max: number, label: string, required = false)
 }
 
 async function readBody(request: Request, maxBytes = 300_000): Promise<Record<string, unknown>> {
+  if (Number(request.headers.get("Content-Length") ?? "0") > maxBytes) throw new HttpError(413, "Request is too large.");
   const raw = await request.text();
   if (raw.length > maxBytes) throw new HttpError(413, "Request is too large.");
   if (!raw) return {};
@@ -221,6 +223,31 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     }
   }
 
+  // ------------------------------------------------------------------- assets
+  if (path === "/assets" && method === "GET") {
+    const rows = await db.prepare("SELECT id, mime, bytes, width, height, created_at FROM slide_assets ORDER BY created_at DESC LIMIT 200")
+      .all<{ id: string; mime: string; bytes: number; width: number | null; height: number | null; created_at: string }>();
+    return json({ assets: rows.results.map((row) => ({ id: row.id, mime: row.mime, bytes: row.bytes, width: row.width, height: row.height, createdAt: row.created_at })) });
+  }
+  if (path === "/assets" && method === "POST") return uploadAsset(request, env, audit);
+  const assetMatch = path.match(/^\/assets\/([A-Za-z0-9_-]{8,80})$/);
+  if (assetMatch && method === "DELETE") {
+    const asset = await db.prepare("SELECT id, r2_key FROM slide_assets WHERE id = ?").bind(assetMatch[1]).first<{ id: string; r2_key: string }>();
+    if (!asset) throw new HttpError(404, "Image not found.");
+    // Never delete an image that a library slide or a published snapshot still uses.
+    const pattern = `%"${asset.id}"%`;
+    const [inSlides, inSnapshots] = await db.batch([
+      db.prepare("SELECT COUNT(*) AS count FROM slides WHERE doc_json LIKE ?").bind(pattern),
+      db.prepare("SELECT COUNT(*) AS count FROM training_snapshots WHERE deck_json LIKE ?").bind(pattern),
+    ]);
+    const used = ((inSlides.results[0] as { count: number }).count ?? 0) + ((inSnapshots.results[0] as { count: number }).count ?? 0);
+    if (used > 0) throw new HttpError(409, "This image is used on a slide or in a published training. Remove it there first.");
+    if (!env.ASSET_BUCKET) throw new HttpError(503, "Image storage is not configured.");
+    await env.ASSET_BUCKET.delete(asset.r2_key);
+    await db.batch([db.prepare("DELETE FROM slide_assets WHERE id = ?").bind(asset.id), audit("asset.delete", { assetId: asset.id })]);
+    return json({ ok: true });
+  }
+
   // ------------------------------------------------------------------- slides
   const slideMatch = path.match(/^\/slides\/([A-Za-z0-9-]{1,64})$/);
   if (slideMatch) {
@@ -268,6 +295,57 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   return json({ error: "Not found" }, 404);
+}
+
+async function uploadAsset(request: Request, env: Env, audit: (action: string, detail?: Record<string, unknown>) => D1PreparedStatement): Promise<Response> {
+  if (!env.ASSET_BUCKET) throw new HttpError(503, "Image storage is not configured. Add the R2 bucket binding ASSET_BUCKET.");
+  const declared = Number(request.headers.get("Content-Length") ?? "0");
+  if (declared > MAX_IMAGE_BYTES) throw new HttpError(413, "Images must be 5 MB or smaller.");
+  const buffer = await request.arrayBuffer();
+  if (buffer.byteLength === 0) throw new HttpError(400, "The upload was empty.");
+  if (buffer.byteLength > MAX_IMAGE_BYTES) throw new HttpError(413, "Images must be 5 MB or smaller.");
+  const bytes = new Uint8Array(buffer);
+  // The file type comes from the bytes themselves; the name and declared type are ignored.
+  const info = detectImage(bytes);
+  if (!info) throw new HttpError(415, "Only PNG, JPEG and WebP images can be uploaded.");
+  if ((info.width ?? 0) > MAX_IMAGE_SIDE || (info.height ?? 0) > MAX_IMAGE_SIDE) throw new HttpError(413, `Images must be at most ${MAX_IMAGE_SIDE} pixels on each side.`);
+  const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const existing = await env.DB.prepare("SELECT id, mime, bytes, width, height, created_at FROM slide_assets WHERE sha256 = ?").bind(digest)
+    .first<{ id: string; mime: string; bytes: number; width: number | null; height: number | null; created_at: string }>();
+  if (existing) return json({ asset: { id: existing.id, mime: existing.mime, bytes: existing.bytes, width: existing.width, height: existing.height, createdAt: existing.created_at }, deduplicated: true });
+  const id = `img-${digest.slice(0, 32)}`;
+  const key = `assets/${digest}`;
+  const now = new Date().toISOString();
+  await env.ASSET_BUCKET.put(key, buffer, { httpMetadata: { contentType: info.mime, cacheControl: "public, max-age=31536000, immutable" } });
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO slide_assets (id, r2_key, mime, bytes, width, height, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, key, info.mime, buffer.byteLength, info.width, info.height, digest, now),
+    audit("asset.upload", { assetId: id, bytes: buffer.byteLength, mime: info.mime }),
+  ]);
+  return json({ asset: { id, mime: info.mime, bytes: buffer.byteLength, width: info.width, height: info.height, createdAt: now }, deduplicated: false }, 201);
+}
+
+/**
+ * Public image delivery for slides (projectors load them with plain <img> tags, which cannot send
+ * a token). Ids are 128-bit content hashes and there is no public listing. Only stored image types
+ * are served, with nosniff and a sandboxing CSP, so a file can never execute as a page.
+ */
+export async function serveAsset(env: Env, id: string): Promise<Response> {
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(id) || !env.ASSET_BUCKET) return new Response("Not found", { status: 404 });
+  const row = await env.DB.prepare("SELECT r2_key, mime FROM slide_assets WHERE id = ?").bind(id).first<{ r2_key: string; mime: string }>();
+  if (!row) return new Response("Not found", { status: 404 });
+  const object = await env.ASSET_BUCKET.get(row.r2_key);
+  if (!object) return new Response("Not found", { status: 404 });
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": row.mime,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Content-Disposition": "inline",
+      "Cross-Origin-Resource-Policy": "same-origin",
+    },
+  });
 }
 
 async function getLesson(env: Env, id: string) {

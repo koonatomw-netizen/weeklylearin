@@ -9,12 +9,13 @@ import { TEMPLATE_INFO } from "../shared/templates";
 import type { Language } from "../shared/types";
 import { Notice, t } from "../ui";
 import { adminApi, type AdminLesson, type AdminLessonDetail, type AdminSlide } from "./adminApi";
+import { AssetPicker } from "./AssetPicker";
 import {
-  addElement, boundingBox, deleteElements, duplicateElements, moveElements, newElement, paragraphsToText, resizeRect,
+  addElement, boundingBox, deleteElements, duplicateElements, imageElement, moveElements, newElement, paragraphsToText, resizeRect,
   snapGuides, snapRect, snapResize, textToParagraphs, updateElement, type Guide, type Handle, type NewElementKind, type Rect,
 } from "./editorOps";
 import { PreviewModal, TemplatePicker } from "./Library";
-import { Properties } from "./Properties";
+import { Properties, type ImageTarget } from "./Properties";
 import { useAutosave, useHistory, type SaveStatus } from "./useEditorState";
 
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -107,6 +108,7 @@ function SlideEditor({ slide, language, onSaved, readOnly }: { slide: AdminSlide
   const [previewStep, setPreviewStep] = useState<number | "all">("all");
   const [guides, setGuides] = useState<Guide[]>([]);
   const [preview, setPreview] = useState<null | { fullscreen: boolean }>(null);
+  const [imageTarget, setImageTarget] = useState<ImageTarget | null>(null);
   const [scale, setScale] = useState(0.5);
   const canvasRef = useRef<HTMLDivElement>(null);
   const drag = useRef<DragState | null>(null);
@@ -235,7 +237,7 @@ function SlideEditor({ slide, language, onSaved, readOnly }: { slide: AdminSlide
         ]} onPick={insert} />
         <button className="btn btn--ghost" disabled={readOnly} onClick={() => insert("window")} title={t(language, "Terminal window frame", "กรอบหน้าต่าง")}><AppWindow size={15} />{t(language, "Window", "หน้าต่าง")}</button>
         <InsertMenu language={language} disabled={readOnly} label={t(language, "Live", "สด")} icon={<Radio size={15} />} items={(["join", "live-stats", "challenge", "battle", "leaderboard", "feedback-status"] as WidgetKind[]).map((kind) => [kind, kind, <Radio size={14} key={kind} />])} onPick={insert} />
-        <button className="btn btn--ghost" disabled title={t(language, "Image upload arrives in Phase 3", "อัปโหลดรูปภาพในเฟส 3")}><ImageIcon size={15} />{t(language, "Image", "รูปภาพ")}</button>
+        <button className="btn btn--ghost" disabled={readOnly} onClick={() => setImageTarget({ mode: "insert" })} title={t(language, "Insert an image", "แทรกรูปภาพ")}><ImageIcon size={15} />{t(language, "Image", "รูปภาพ")}</button>
         <span className="toolbar-sep" />
         <button className="icon-button" disabled={!history.canUndo || readOnly} onClick={history.undo} aria-label={t(language, "Undo", "เลิกทำ")} title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
         <button className="icon-button" disabled={!history.canRedo || readOnly} onClick={history.redo} aria-label={t(language, "Redo", "ทำซ้ำ")} title="Redo (Ctrl+Shift+Z)"><Redo2 size={15} /></button>
@@ -287,7 +289,23 @@ function SlideEditor({ slide, language, onSaved, readOnly }: { slide: AdminSlide
     </section>
 
     <Properties language={language} doc={doc} title={title} selection={selection} readOnly={readOnly}
-      onTitle={setTitle} onSelect={setSelection} onChange={apply} onEditText={(id) => { setSelection([id]); setEditing(id); }} />
+      onTitle={setTitle} onSelect={setSelection} onChange={apply} onEditText={(id) => { setSelection([id]); setEditing(id); }} onChooseImage={setImageTarget} />
+
+    {imageTarget && <AssetPicker language={language} onClose={() => setImageTarget(null)}
+      title={imageTarget.mode === "background" ? t(language, "choose a background image", "เลือกรูปพื้นหลัง") : t(language, "choose an image", "เลือกรูปภาพ")}
+      onPick={(asset) => {
+        const target = imageTarget;
+        setImageTarget(null);
+        if (target.mode === "insert") {
+          const element = imageElement(asset);
+          apply((current) => addElement(current, element));
+          setSelection([element.id]);
+        } else if (target.mode === "replace") {
+          apply((current) => updateElement(current, target.id, { assetId: asset.id } as Partial<SlideElement>));
+        } else {
+          apply((current) => ({ ...current, background: { assetId: asset.id } }));
+        }
+      }} />}
 
     {preview && <PreviewModal slides={[{ ...slide, title, doc }]} start={0} language={language} startFullscreen={preview.fullscreen} onClose={() => setPreview(null)} />}
   </>;

@@ -16,6 +16,7 @@ export interface Env {
   ASSETS: Fetcher;
   HOST_PASSPHRASE?: string;
   ADMIN_PASSPHRASE?: string;
+  ASSET_BUCKET?: R2Bucket;
 }
 
 interface Ticket { role: Role; participantId?: string; expiresAt: number }

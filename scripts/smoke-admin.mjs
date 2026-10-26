@@ -98,6 +98,44 @@ const dashboard = await request('/api/admin/dashboard', { token });
 check(dashboard.lessons >= 1 && dashboard.recent.some((r) => r.action === 'slide.update'), 'Dashboard counts and audit log.');
 log('archive/restore rules, Week 01 seed (idempotent), dashboard + audit');
 
+// ------------------------------------------------------------- images
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+const unique = Buffer.concat([png, Buffer.from(`smoke-${Date.now()}`)]); // bytes after IEND: still a PNG, new hash
+async function upload(body, type, { auth = token, expected = 201 } = {}) {
+  const response = await fetch(`${base}/api/admin/assets`, { method: 'POST', headers: { 'Content-Type': type, ...(auth ? { Authorization: `Bearer ${auth}` } : {}) }, body, signal: AbortSignal.timeout(15000) });
+  const result = await response.json().catch(() => ({}));
+  const allowed = Array.isArray(expected) ? expected : [expected];
+  assert.ok(allowed.includes(response.status), `upload ${type}: expected ${allowed} got ${response.status} ${JSON.stringify(result)}`);
+  checks++;
+  return result;
+}
+await upload(unique, 'image/png', { auth: null, expected: 401 });
+await upload(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), 'image/svg+xml', { expected: 415 });
+await upload(Buffer.from('<html><script>alert(1)</script></html>'), 'image/png', { expected: 415 });
+await upload(Buffer.alloc(5 * 1024 * 1024 + 10, 1), 'image/png', { expected: 413 });
+const first = await upload(unique, 'application/octet-stream');
+check(first.asset.mime === 'image/png' && first.asset.width === 1 && first.asset.height === 1, 'Type and size come from the bytes, not the declared type.');
+const again = await upload(unique, 'image/png', { expected: 200 });
+check(again.deduplicated && again.asset.id === first.asset.id, 'Identical uploads are de-duplicated.');
+const served = await fetch(`${base}/api/assets/${first.asset.id}`);
+check(served.status === 200 && served.headers.get('content-type') === 'image/png', 'Image served with its stored type.');
+check(served.headers.get('x-content-type-options') === 'nosniff' && served.headers.get('content-security-policy')?.includes('sandbox'), 'Image served with nosniff and a sandbox CSP.');
+check(Buffer.from(await served.arrayBuffer()).equals(unique), 'Served bytes match the upload.');
+check((await fetch(`${base}/api/assets/img-doesnotexist000000`)).status === 404, 'Unknown image ids return 404.');
+check((await fetch(`${base}/api/assets/..%2F..%2Fwrangler.jsonc`)).status === 404, 'Path tricks return 404.');
+const assetList = (await request('/api/admin/assets', { token })).assets;
+check(assetList.some((a) => a.id === first.asset.id), 'Uploaded image appears in the admin library.');
+// Use it on a slide (passes the server-side "asset exists" check), then try to delete it.
+const imageSlide = (await request(`/api/admin/lessons/${seed.lesson.id}/slides`, { method: 'POST', token, data: { template: 'title' }, expected: 201 })).slide;
+const withImage = { ...imageSlide.doc, background: { assetId: first.asset.id }, elements: [...imageSlide.doc.elements, { id: 'smoke-img', type: 'image', assetId: first.asset.id, fit: 'contain', alt: 'test', x: 100, y: 100, w: 200, h: 200 }] };
+const savedImage = (await request(`/api/admin/slides/${imageSlide.id}`, { method: 'PATCH', token, data: { version: imageSlide.version, doc: withImage } })).slide;
+check(savedImage.doc.elements.some((e) => e.type === 'image') && savedImage.doc.background.assetId === first.asset.id, 'Image element and background image saved.');
+await request(`/api/admin/assets/${first.asset.id}`, { method: 'DELETE', token, expected: 409 });
+await request(`/api/admin/slides/${imageSlide.id}`, { method: 'DELETE', token });
+await request(`/api/admin/assets/${first.asset.id}`, { method: 'DELETE', token });
+check((await fetch(`${base}/api/assets/${first.asset.id}`)).status === 404, 'Deleted image is no longer served.');
+log('images: auth, SVG/HTML/oversize refused, byte sniffing, dedupe, safe delivery headers, in-use delete blocked, delete');
+
 // ------------------------------------------------------------- logout
 await request('/api/admin/logout', { method: 'POST', token });
 await request('/api/admin/lessons', { token, expected: 401 });

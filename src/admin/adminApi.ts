@@ -5,6 +5,7 @@ import type { TemplateId } from "../shared/templates";
 export interface AdminSlide { id: string; lessonId: string; position: number; title: string; doc: SlideDoc; version: number; updatedAt: string }
 export interface AdminLesson { id: string; title: string; category: string; description: string; createdAt: string; updatedAt: string; archived: boolean; slideCount: number }
 export interface AdminLessonDetail extends AdminLesson { slides: AdminSlide[] }
+export interface AdminAsset { id: string; mime: string; bytes: number; width: number | null; height: number | null; createdAt: string }
 export interface Dashboard { lessons: number; slides: number; sessions: number; feedback: number; recent: Array<{ action: string; createdAt: string }> }
 
 const KEY = "4seas:admin";
@@ -54,5 +55,8 @@ export const adminApi = {
   lessonSlide: (id: string) => call<{ slide: AdminSlide }>(`/slides/${id}`),
   updateSlide: (id: string, data: { version: number; title?: string; doc?: SlideDoc }) => call<{ slide: AdminSlide }>(`/slides/${id}`, send("PATCH", data)),
   deleteSlide: (id: string) => call<{ ok: true }>(`/slides/${id}`, { method: "DELETE" }),
+  assets: () => call<{ assets: AdminAsset[] }>("/assets"),
+  uploadAsset: (file: File) => call<{ asset: AdminAsset; deduplicated: boolean }>("/assets", { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } }),
+  deleteAsset: (id: string) => call<{ ok: true }>(`/assets/${id}`, { method: "DELETE" }),
   reorder: (lessonId: string, slideIds: string[]) => call<{ lesson: AdminLessonDetail }>(`/lessons/${lessonId}/reorder`, send("POST", { slideIds })),
 };

@@ -1,6 +1,16 @@
 # 4Seas Training Studio — Assessment & Plan
 
-Status: **Phases 1–2 implemented** (approved with option A admin sessions; R2 planned for Phase 3). Phases 3–6 are still proposals unless marked delivered below.
+Status: **Phases 1–3 implemented** (approved with option A admin sessions; R2 planned for Phase 3). Phases 3–6 are still proposals unless marked delivered below.
+
+## Phase 3 — delivered
+
+- **Storage:** R2 bucket binding `ASSET_BUCKET` (`4seas-training-assets`) in `wrangler.jsonc`. Local dev uses Wrangler's built-in R2 emulation; no cloud bucket was created.
+- **Upload** `POST /api/admin/assets` (admin only): the raw image body, at most 5 MB and at most 12,000 px per side. The type is detected from the **bytes** (`src/shared/imageInfo.ts`), not the file name or the declared type: only PNG, JPEG and WebP are accepted, and SVG or HTML is refused. Pixel size is read from the header. Identical files are de-duplicated by SHA-256, and every upload is audited.
+- **Delivery** `GET /api/assets/:id`: unauthenticated so projectors can load plain `<img>` tags. Ids are 128-bit content hashes and there is no public listing. Only stored image types are served, with `nosniff`, a `default-src 'none'; sandbox` CSP, `Cross-Origin-Resource-Policy: same-origin` and immutable caching.
+- **Delete** `DELETE /api/admin/assets/:id`: refused while any library slide or published snapshot still references the image.
+- **Builder:** an Image button and an asset picker (upload, choose, delete). Images are placed at their real aspect ratio. Replace image, fit (cover or contain), alt text, and a slide background image.
+- **Tests:** 3 unit tests (byte detection for PNG, JPEG and WebP; rejection of SVG, HTML and GIF; aspect fitting) and 22 more admin smoke assertions (75 total): auth, SVG/HTML/oversize refused, sniffing, de-duplication, delivery headers, path tricks, in-use delete blocked, delete. Browser-verified: generated an 800×450 PNG, picked it in the Builder, and it was placed at its true ratio and autosaved.
+- **Before production:** enable R2 on the Cloudflare account (it needs a payment method on file, even within the free tier), then run `npx wrangler r2 bucket create 4seas-training-assets`.
 
 ## Phase 2 — delivered
 

@@ -49,7 +49,7 @@ Slides 5–7 are live screens. Slide 5 shows the challenge, room code, QR code a
 
 ## Training Studio (admin workspace)
 
-Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. It includes the Dashboard, the Lesson Library (create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, preview) and the visual **Slide Builder** (drag, resize, snapping, inline text editing, shapes, windows, live widgets, layers, reveal steps, undo/redo, autosave with conflict handling, fullscreen preview). Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The Weekly Planner, visual Slide Builder, live snapshots, and cross-session reports arrive in later phases; see `docs/STUDIO-PLAN.md`.
+Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. It includes the Dashboard, the Lesson Library (create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, preview) and the visual **Slide Builder** (drag, resize, snapping, inline text editing, shapes, windows, live widgets, **images and background images** stored in R2, layers, reveal steps, undo/redo, autosave with conflict handling, fullscreen preview). Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The Weekly Planner, visual Slide Builder, live snapshots, and cross-session reports arrive in later phases; see `docs/STUDIO-PLAN.md`.
 
 ## Checks
 
@@ -64,7 +64,7 @@ Open `/?view=admin` (or use the link at the bottom of the home page) and sign in
 Nothing has been deployed yet. `wrangler.jsonc` still holds a placeholder `database_id`.
 
 1. `npx wrangler login`
-2. Create the production database (first deploy only): `npx wrangler d1 create 4seas-training`, then copy the printed `database_id` into `wrangler.jsonc`.
+2. Create the production database (first deploy only): `npx wrangler d1 create 4seas-training`, then copy the printed `database_id` into `wrangler.jsonc`. For slide images, enable R2 on the account (Cloudflare requires a payment method even for the free tier) and run `npx wrangler r2 bucket create 4seas-training-assets`.
 3. Apply migrations: `pnpm db:migrate:remote`. `0002` and `0003` are additive: they only add tables, triggers, and columns, so existing rooms and legacy submissions are kept. Back up first with `npx wrangler d1 export 4seas-training --remote --output backup.sql`.
 4. Set the passphrases as secrets: `npx wrangler secret put HOST_PASSPHRASE` and `npx wrangler secret put ADMIN_PASSPHRASE` (use different values).
 5. `pnpm deploy` builds the SPA into `dist/` and deploys the Worker, assets, and the `RoomHub` Durable Object.

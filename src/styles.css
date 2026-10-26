@@ -849,6 +849,14 @@ blockquote.prompt-text { margin: 0; padding: 10px 12px; border-left: 3px solid v
 .layer-name:hover { background: var(--surface-2); }
 .layers .icon-button { width: 26px; height: 26px; }
 
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.asset-card { display: flex; flex-direction: column; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.asset-thumb { padding: 0; border: 0; background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; aspect-ratio: 4 / 3; cursor: pointer; }
+.asset-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.asset-thumb:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+.asset-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; }
+.asset-meta .icon-button { width: 26px; height: 26px; }
+
 @media (max-width: 1280px) {
   .builder { grid-template-columns: 150px minmax(0, 1fr) 260px; }
 }

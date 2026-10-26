@@ -10,10 +10,11 @@ import { t } from "../ui";
 import { alignElements, deleteElements, duplicateElements, reorderLayer, styleAllParagraphs, styleAllRuns, updateElement, updateElements } from "./editorOps";
 
 type Apply = (next: SlideDoc | ((current: SlideDoc) => SlideDoc)) => void;
+export type ImageTarget = { mode: "insert" } | { mode: "replace"; id: string } | { mode: "background" };
 
-export function Properties({ language, doc, title, selection, readOnly, onTitle, onSelect, onChange, onEditText }: {
+export function Properties({ language, doc, title, selection, readOnly, onTitle, onSelect, onChange, onEditText, onChooseImage }: {
   language: Language; doc: SlideDoc; title: string; selection: string[]; readOnly: boolean;
-  onTitle: (title: string) => void; onSelect: (ids: string[]) => void; onChange: Apply; onEditText: (id: string) => void;
+  onTitle: (title: string) => void; onSelect: (ids: string[]) => void; onChange: Apply; onEditText: (id: string) => void; onChooseImage: (target: ImageTarget) => void;
 }) {
   const selected = doc.elements.filter((element) => selection.includes(element.id));
   const single = selected.length === 1 ? selected[0] : null;
@@ -23,10 +24,15 @@ export function Properties({ language, doc, title, selection, readOnly, onTitle,
     {!selected.length && <Section title={t(language, "Slide", "สไลด์")}>
       <Field label={t(language, "title", "ชื่อสไลด์")}><CommitInput value={title} maxLength={120} disabled={readOnly} onCommit={onTitle} /></Field>
       <Field label={t(language, "background", "พื้นหลัง")}>
-        <select className="input" disabled={readOnly} value={"token" in doc.background ? doc.background.token : "bg"} onChange={(event) => onChange((current) => ({ ...current, background: { token: event.target.value as "bg" } }))}>
+        <select className="input" disabled={readOnly} value={"token" in doc.background ? doc.background.token : "image"} onChange={(event) => {
+          if (event.target.value === "image") onChooseImage({ mode: "background" });
+          else onChange((current) => ({ ...current, background: { token: event.target.value as "bg" } }));
+        }}>
           <option value="bg">{t(language, "Charcoal", "ถ่าน")}</option><option value="surface">{t(language, "Surface", "พื้นผิว")}</option><option value="accent-soft">{t(language, "Warm accent", "ส้มอ่อน")}</option>
+          <option value="image">{"assetId" in doc.background ? t(language, "Image (selected)", "รูปภาพ (เลือกแล้ว)") : t(language, "Image…", "รูปภาพ…")}</option>
         </select>
       </Field>
+      {"assetId" in doc.background && <button className="btn btn--ghost" disabled={readOnly} onClick={() => onChooseImage({ mode: "background" })}>{t(language, "Change background image", "เปลี่ยนรูปพื้นหลัง")}</button>}
       <Field label={t(language, "presenter notes (not shown to participants)", "บันทึกผู้สอน (ผู้เข้าร่วมไม่เห็น)")}>
         <CommitInput multiline value={doc.notes ?? ""} maxLength={4000} disabled={readOnly} onCommit={(notes) => onChange((current) => {
           const { notes: _previous, ...rest } = current;
@@ -36,7 +42,7 @@ export function Properties({ language, doc, title, selection, readOnly, onTitle,
       <p className="hint">{t(language, "Select an element on the canvas to edit it. Ctrl+A selects everything.", "เลือกชิ้นงานบนสไลด์เพื่อแก้ไข Ctrl+A เลือกทั้งหมด")}</p>
     </Section>}
 
-    {single && <ElementProps element={single} language={language} readOnly={readOnly} patch={(value) => patch(single.id, value)} onChange={onChange} onSelect={onSelect} onEditText={onEditText} />}
+    {single && <ElementProps element={single} language={language} readOnly={readOnly} patch={(value) => patch(single.id, value)} onChange={onChange} onSelect={onSelect} onEditText={onEditText} onChooseImage={onChooseImage} />}
 
     {selected.length > 1 && <Section title={t(language, `${selected.length} elements`, `${selected.length} ชิ้น`)}>
       <AlignRow language={language} disabled={readOnly} onAlign={(mode) => onChange((current) => alignElements(current, selection, mode))} />
@@ -66,8 +72,8 @@ export function Properties({ language, doc, title, selection, readOnly, onTitle,
   </aside>;
 }
 
-function ElementProps({ element, language, readOnly, patch, onChange, onSelect, onEditText }: {
-  element: SlideElement; language: Language; readOnly: boolean; patch: (value: Partial<SlideElement>) => void; onChange: Apply; onSelect: (ids: string[]) => void; onEditText: (id: string) => void;
+function ElementProps({ element, language, readOnly, patch, onChange, onSelect, onEditText, onChooseImage }: {
+  element: SlideElement; language: Language; readOnly: boolean; patch: (value: Partial<SlideElement>) => void; onChange: Apply; onSelect: (ids: string[]) => void; onEditText: (id: string) => void; onChooseImage: (target: ImageTarget) => void;
 }) {
   const disabled = readOnly || Boolean(element.locked);
   return <>
@@ -113,6 +119,7 @@ function ElementProps({ element, language, readOnly, patch, onChange, onSelect, 
       <p className="hint">{WIDGET_LABELS[element.widget].hint}. {t(language, "Uses live session data in Presenter Mode.", "ใช้ข้อมูลจริงในโหมดผู้สอน")}</p>
     </Section>}
     {element.type === "image" && <Section title={t(language, "Image", "รูปภาพ")}>
+      <button className="btn" disabled={disabled} onClick={() => onChooseImage({ mode: "replace", id: element.id })}>{t(language, "Replace image", "เปลี่ยนรูป")}</button>
       <Field label={t(language, "fit", "การจัดภาพ")}><select className="input" disabled={disabled} value={element.fit} onChange={(event) => patch({ fit: event.target.value as "cover" })}><option value="cover">{t(language, "Fill (crop)", "เต็มกรอบ (ครอบตัด)")}</option><option value="contain">{t(language, "Fit (no crop)", "พอดีกรอบ")}</option></select></Field>
       <Field label={t(language, "alt text (for screen readers)", "คำอธิบายภาพ")}><CommitInput value={element.alt} maxLength={200} disabled={disabled} onCommit={(alt) => patch({ alt })} /></Field>
     </Section>}
