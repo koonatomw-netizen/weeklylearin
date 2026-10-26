@@ -1,0 +1,38 @@
+{
+  "name": "4seas-live-training",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "db:apply": "wrangler d1 migrations apply 4seas-training --local",
+    "dev": "pnpm db:apply && concurrently -k \"pnpm dev:worker\" \"pnpm dev:web\"",
+    "dev:web": "vite --host 0.0.0.0",
+    "dev:worker": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "build": "tsc -b && vite build",
+    "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit",
+    "test": "vitest run",
+    "check": "pnpm build && pnpm typecheck:worker && pnpm test",
+    "smoke": "node scripts/smoke-room.mjs",
+    "preview": "pnpm build && wrangler dev --ip 0.0.0.0 --port 8787",
+    "db:migrate:remote": "wrangler d1 migrations apply 4seas-training --remote",
+    "deploy": "pnpm build && wrangler deploy"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261026.1",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.0.0"
+  }
+}
