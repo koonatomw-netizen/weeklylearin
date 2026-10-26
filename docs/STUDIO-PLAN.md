@@ -1,6 +1,17 @@
 # 4Seas Training Studio — Assessment & Plan
 
-Status: **Phases 1–3 implemented** (approved with option A admin sessions; R2 planned for Phase 3). Phases 3–6 are still proposals unless marked delivered below.
+Status: **Phases 1–4 implemented** (approved with option A admin sessions; R2 planned for Phase 3). Phases 3–6 are still proposals unless marked delivered below.
+
+## Phase 4 — delivered
+
+- **Weekly Planner** (`src/admin/Planner.tsx`, `src/worker/plans.ts`): create a plan with title, week date, duration and admin notes, plus the **Prompt Battle challenge** (English required, Thai falls back to English). Pick slides from any lesson (or add a whole lesson), reorder, remove, preview, and save the draft with an unsaved-changes warning. **Duplicate** copies the slides and challenge, moves the date forward 7 days, and starts as a draft. Drafts can be deleted; published plans cannot.
+- **Publish:** re-validates every slide, then writes an immutable versioned snapshot (`training_snapshots`; a DB trigger blocks updates) containing the slides, the challenge and the plan details. The plan shows "vN · published", or "unpublished changes" when the plan *or any slide it uses* changed after the last publish. Every version can be previewed.
+- **Live Sessions** (`src/admin/LiveSessions.tsx`): start a room from any published version (the latest from the list, or any version from the plan page). The host token is stored in that browser and the presenter opens. A recent-sessions table shows version, stage, participants and feedback count.
+- **Room engine:** `rooms.snapshot_id` selects the deck. The Durable Object loads and caches the frozen deck; navigation bounds and reveal steps come from it. Starting writing, generating battles, opening voting, the Grand Final and showing results jump to the slide containing the matching live widget (or stay put if there is none). The state now carries `snapshotId`, `totalSlides`, `slideSteps` and `challenge`.
+- **Deck delivery:** `GET /api/rooms/:code/deck` (presenter token only) returns the frozen slides including presenter notes. It is not part of the per-change broadcast. Participants never receive slides.
+- **Presenter/Projector:** JSON slides render through `SlideRenderer`, with **live widgets bound to the room**: join (QR and code), live stats, challenge, battle board with the presenter's next-action button, leaderboard, and feedback completion (counts only). The presenter shows slide titles, live tags and presenter notes. The projector never shows controls. The participant challenge card and the presenter's writing tab use the room's challenge.
+- **Backward compatibility:** rooms with `snapshot_id = NULL` (all earlier rooms, and rooms created from the home page) keep the built-in Week 01 deck and its 7-slide navigation unchanged; the existing 185-assertion room test still passes.
+- **Tests:** 3 unit tests (deck metadata, legacy layout, challenge validation) and `scripts/smoke-studio.mjs` with 81 assertions. They cover plan validation, the empty-publish refusal, draft delete, publishing v1, **a library edit after publishing leaving v1 untouched** while flagging the plan, a room from v1 (title, challenge, 5 slides, steps), a presenter-only deck, bounded navigation, the widget-slide jumps through a full writing → battle → results run, **v2 picking up the edit while the running v1 room keeps v1**, duplicating a week, protecting published plans and in-use slides, the sessions list, and legacy rooms unchanged. A direct SQL check confirms the snapshot-immutability trigger. Browser-verified: the plan editor, starting a session from the UI, and the presenter running the v2 deck with live challenge, join and stats widgets.
 
 ## Phase 3 — delivered
 

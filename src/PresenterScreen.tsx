@@ -5,10 +5,11 @@ import {
 } from "lucide-react";
 import { control, exportResults, getFeedbackResponses } from "./api";
 import { groupSizes } from "./shared/battle";
-import { SLIDE_STEPS, SLIDE_TITLES, TOTAL_SLIDES, WEEK01_CHALLENGE } from "./shared/challenge";
+import { SLIDE_TITLES } from "./shared/challenge";
+import { PresentedSlide, useDeck } from "./slides/PresentedSlide";
 import type { BattleView, ControlAction, FeedbackResponse, HostState, Language, RoomEnvelope } from "./shared/types";
 import { MAX_ATTEMPTS } from "./shared/types";
-import { Slide, SlideStage, battleTitle, nextCommand, statusLabel, type BattleCommand } from "./slides/Deck";
+import { SlideStage, battleTitle, nextCommand, statusLabel, type BattleCommand } from "./slides/Deck";
 import type { Theme } from "./theme";
 import { useRoom } from "./useRoom";
 import { Brand, LanguageSwitch, LiveDot, Notice, QRStamp, TerminalWindow, ThemeToggle, formatCode, t } from "./ui";
@@ -58,6 +59,7 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
   const sequence = useRef(0);
   const fullscreen = useFullscreen();
   const state = room?.state as HostState | undefined;
+  const { deck, error: deckError } = useDeck(code, token, state?.snapshotId);
 
   const send = useCallback(async (action: ControlAction, optimistic?: (current: RoomEnvelope) => RoomEnvelope) => {
     const id = ++sequence.current;
@@ -80,12 +82,12 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
 
   const stepSlide = useCallback((direction: 1 | -1) => {
     if (!state) return;
-    const { currentSlide: index, slideStep: step } = state;
+    const { currentSlide: index, slideStep: step, slideSteps, totalSlides } = state;
     if (direction === 1) {
-      if (step < SLIDE_STEPS[index]) goTo(index, step + 1);
-      else if (index < TOTAL_SLIDES - 1) goTo(index + 1, 0);
+      if (step < (slideSteps[index] ?? 0)) goTo(index, step + 1);
+      else if (index < totalSlides - 1) goTo(index + 1, 0);
     } else if (step > 0) goTo(index, step - 1);
-    else if (index > 0) goTo(index - 1, SLIDE_STEPS[index - 1]);
+    else if (index > 0) goTo(index - 1, slideSteps[index - 1] ?? 0);
   }, [state, goTo]);
 
   useEffect(() => {
@@ -114,6 +116,12 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
     { id: "feedback", en: "Feedback", th: "แบบสอบถาม" },
   ];
 
+  const total = state.totalSlides;
+  const stepsHere = state.slideSteps[state.currentSlide] ?? 0;
+  const slideTitles = deck ? deck.slides.map((slide) => slide.title || "Untitled") : SLIDE_TITLES;
+  const isLive = (index: number) => (deck ? deck.slides[index]?.doc.elements.some((element) => element.type === "widget") : index >= 4);
+  const notes = deck?.slides[state.currentSlide]?.doc.notes;
+
   async function downloadCsv(kind: "export" | "feedbackcsv" = "export") {
     try {
       const file = await exportResults(code, token, kind);
@@ -132,7 +140,7 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
     <header className="app-header">
       <Brand compact />
       <div className="app-header-mid">
-        <span className="header-title">{t(language, "Week 01 · Prompt Engineering", "สัปดาห์ที่ 1 · Prompt Engineering")}</span>
+        <span className="header-title">{state.snapshotId ? state.title : t(language, "Week 01 · Prompt Engineering", "สัปดาห์ที่ 1 · Prompt Engineering")}</span>
         <span className="code-chip" title={t(language, "Room code", "รหัสห้อง")}>{formatCode(code)}</span>
       </div>
       <div className="app-header-right">
@@ -151,16 +159,17 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
 
     {toast && <div className="toast-row"><Notice>{toast}</Notice></div>}
     {syncError && !connected && <div className="toast-row"><Notice kind="info">{syncError}</Notice></div>}
+    {deckError && !deck && <div className="toast-row"><Notice kind="info">{deckError}</Notice></div>}
 
     {mode === "slides" && <section className="slides-mode">
       <div className="slides-main">
         <div className={`stage-shell${fullscreen.active ? " is-fullscreen" : ""}`} ref={fullscreen.ref}>
           <SlideStage>
-            <Slide index={state.currentSlide} step={state.slideStep} language={language} state={state} joinUrl={joinUrl} onCommand={command} busy={busy} />
+            <PresentedSlide state={state} deck={deck} language={language} joinUrl={joinUrl} onCommand={command} busy={busy} />
           </SlideStage>
           {fullscreen.active && <div className="fs-controls">
             <button className="icon-button" onClick={() => stepSlide(-1)} aria-label="Previous"><ChevronLeft size={18} /></button>
-            <span>{state.currentSlide + 1}/{TOTAL_SLIDES}</span>
+            <span>{state.currentSlide + 1}/{total}</span>
             <button className="icon-button" onClick={() => stepSlide(1)} aria-label="Next"><ChevronRight size={18} /></button>
             <button className="icon-button" onClick={fullscreen.toggle} aria-label="Exit fullscreen"><Minimize size={16} /></button>
           </div>}
@@ -168,22 +177,23 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
         <div className="slide-controls">
           <button className="btn" onClick={() => stepSlide(-1)} disabled={state.currentSlide === 0 && state.slideStep === 0}><ChevronLeft size={16} />{t(language, "Previous", "ก่อนหน้า")}</button>
           <div className="slide-position">
-            <span className="mono">{String(state.currentSlide + 1).padStart(2, "0")}/{String(TOTAL_SLIDES).padStart(2, "0")}</span>
-            {SLIDE_STEPS[state.currentSlide] > 0 && <span className="step-dots" aria-label={`step ${state.slideStep} of ${SLIDE_STEPS[state.currentSlide]}`}>
-              {Array.from({ length: SLIDE_STEPS[state.currentSlide] }, (_, index) => <i key={index} className={index < state.slideStep ? "is-on" : ""} />)}
+            <span className="mono">{String(state.currentSlide + 1).padStart(2, "0")}/{String(total).padStart(2, "0")}</span>
+            {stepsHere > 0 && <span className="step-dots" aria-label={`step ${state.slideStep} of ${stepsHere}`}>
+              {Array.from({ length: stepsHere }, (_, index) => <i key={index} className={index < state.slideStep ? "is-on" : ""} />)}
             </span>}
             <span className="mono-dim kbd-hint">← → · F</span>
           </div>
           <div className="slide-controls-right">
             <button className="btn btn--ghost" onClick={() => window.open(`${window.location.origin}/?view=projector&room=${code}`, `4seas-projector-${code}`)}><Monitor size={16} />{t(language, "Projector window", "หน้าต่างโปรเจกเตอร์")}<ExternalLink size={13} /></button>
             <button className="btn btn--ghost" onClick={fullscreen.toggle}><Maximize size={16} />{t(language, "Fullscreen", "เต็มจอ")}</button>
-            <button className="btn btn--accent" onClick={() => stepSlide(1)} disabled={state.currentSlide === TOTAL_SLIDES - 1 && state.slideStep >= SLIDE_STEPS[TOTAL_SLIDES - 1]}>{t(language, "Next", "ถัดไป")}<ChevronRight size={16} /></button>
+            <button className="btn btn--accent" onClick={() => stepSlide(1)} disabled={state.currentSlide === total - 1 && state.slideStep >= stepsHere}>{t(language, "Next", "ถัดไป")}<ChevronRight size={16} /></button>
           </div>
         </div>
+        {notes && <div className="notes-box"><b>{t(language, "Presenter notes", "บันทึกผู้สอน")}:</b> {notes}</div>}
       </div>
       <aside className="slide-list" aria-label={t(language, "Slides", "สไลด์")}>
-        {SLIDE_TITLES.map((title, index) => <button key={title} className={index === state.currentSlide ? "is-on" : ""} onClick={() => goTo(index, 0)} aria-current={index === state.currentSlide ? "true" : undefined}>
-          <span className="mono">{String(index + 1).padStart(2, "0")}</span>{title}{index >= 4 && <em className="live-tag">live</em>}
+        {slideTitles.map((title, index) => <button key={index} className={index === state.currentSlide ? "is-on" : ""} onClick={() => goTo(index, 0)} aria-current={index === state.currentSlide ? "true" : undefined}>
+          <span className="mono">{String(index + 1).padStart(2, "0")}</span>{title}{isLive(index) && <em className="live-tag">live</em>}
         </button>)}
       </aside>
     </section>}
@@ -240,8 +250,8 @@ function WritingControl({ state, language, busy, send }: { state: HostState; lan
   const submissions = [...state.submissions].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   return <section className="panel-grid">
     <TerminalWindow title="challenge.md" right={<span className={`status-chip is-${state.activity === "writing" ? "open" : "pending"}`}><i />{status}</span>}>
-      <p className="lead">{t(language, WEEK01_CHALLENGE.scenarioEn, WEEK01_CHALLENGE.scenarioTh)}</p>
-      <p>{t(language, WEEK01_CHALLENGE.taskEn, WEEK01_CHALLENGE.taskTh)}</p>
+      <p className="lead">{t(language, state.challenge.scenarioEn, state.challenge.scenarioTh)}</p>
+      <p>{t(language, state.challenge.taskEn, state.challenge.taskTh)}</p>
       <div className="stat-row">
         <div className="stat"><span>{t(language, "joined", "เข้าร่วม")}</span><b>{state.participantCount}</b></div>
         <div className="stat"><span>{t(language, "submitted", "ส่งแล้ว")}</span><b>{state.submittedCount}</b></div>

@@ -77,7 +77,7 @@ function ElementBody({ element, renderWidget }: { element: SlideElement; renderW
     case "image":
       return <img className="sr-image" src={`/api/assets/${encodeURIComponent(element.assetId)}`} alt={element.alt} style={{ objectFit: element.fit }} draggable={false} />;
     case "widget":
-      return renderWidget ? <>{renderWidget(element.widget, element)}</> : <div className="sr-widget">
+      return renderWidget ? <>{renderWidget(element.widget, element)}</> : <div className="sr-widget-placeholder">
         <span className="sr-widget-badge"><Radio size={18} />LIVE</span>
         <strong>{WIDGET_LABELS[element.widget].en}</strong>
         <span>{WIDGET_LABELS[element.widget].hint}</span>

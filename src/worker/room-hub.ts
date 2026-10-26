@@ -1,5 +1,6 @@
 import { formGroups, shuffle, topEntryIds } from "../shared/battle";
-import { SLIDE_STEPS, TOTAL_SLIDES } from "../shared/challenge";
+import { LEGACY_META, deckMeta, type DeckMeta, type PublishedDeck } from "../shared/deck";
+import type { WidgetKind } from "../shared/slideDoc";
 import {
   FEEDBACK_TEXT_MAX, MAX_ATTEMPTS, MAX_PARTICIPANTS, PROMPT_MAX, PROMPT_MIN,
   type ChecklistKey, type ControlAction, type FeedbackResponse, type Role,
@@ -92,6 +93,7 @@ export class RoomHub {
   private readonly rate = new Map<string, { count: number; reset: number }>();
   private broadcasting: Promise<void> | null = null;
   private dirty = false;
+  private deck: { id: string; deck: PublishedDeck; meta: DeckMeta } | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     this.ctx = ctx;
@@ -118,6 +120,7 @@ export class RoomHub {
       else if (pathname === "/feedback" && request.method === "POST") response = await this.submitFeedback(request, room);
       else if (pathname === "/responses" && request.method === "GET") response = await this.feedbackResponses(request, room);
       else if (pathname === "/feedbackcsv" && request.method === "GET") response = await this.exportFeedbackCsv(request, room);
+      else if (pathname === "/deck" && request.method === "GET") response = await this.getDeck(request, room);
       else response = json({ error: "Not found" }, 404);
       return response;
     } catch (error) {
@@ -155,7 +158,7 @@ export class RoomHub {
   }
 
   private async getRoom(): Promise<RoomRow | null> {
-    return this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id FROM rooms WHERE code = ?")
+    return this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id FROM rooms WHERE code = ?")
       .bind(this.code).first<RoomRow>();
   }
 
@@ -178,7 +181,7 @@ export class RoomHub {
   private async snapshot(includeActions = false): Promise<Snapshot> {
     const db = this.env.DB;
     const [room, participants, submissions, finals, battles, entries, votes, actions, feedback] = await db.batch([
-      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id FROM rooms WHERE code = ?").bind(this.code),
+      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id FROM rooms WHERE code = ?").bind(this.code),
       db.prepare("SELECT id, nickname, joined_at FROM participants WHERE room_code = ? ORDER BY joined_at, nickname").bind(this.code),
       db.prepare("SELECT id, participant_id, attempt, prompt_text, request_id, checklist_json, submitted_at FROM prompt_submissions WHERE room_code = ? ORDER BY submitted_at").bind(this.code),
       db.prepare("SELECT participant_id, submission_id, auto_selected FROM final_selections WHERE room_code = ?").bind(this.code),
@@ -202,7 +205,27 @@ export class RoomHub {
       votes: votes.results as VoteRow[],
       actions: actions.results as ActionRow[],
       feedback: feedback.results as FeedbackStatusRow[],
+      meta: (await this.loadDeck(roomRow))?.meta ?? LEGACY_META,
     };
+  }
+
+  /** The published deck for this room (cached: snapshots never change), or null for the built-in deck. */
+  private async loadDeck(room: RoomRow): Promise<{ deck: PublishedDeck; meta: DeckMeta } | null> {
+    if (!room.snapshot_id) return null;
+    if (this.deck?.id === room.snapshot_id) return this.deck;
+    const row = await this.env.DB.prepare("SELECT deck_json FROM training_snapshots WHERE id = ?").bind(room.snapshot_id).first<{ deck_json: string }>();
+    if (!row) throw new HttpError(500, "This session's published slides could not be found.");
+    const deck = JSON.parse(row.deck_json) as PublishedDeck;
+    this.deck = { id: room.snapshot_id, deck, meta: deckMeta(deck) };
+    return this.deck;
+  }
+
+  /** Presenter/projector only: the frozen slides, including presenter notes. */
+  private async getDeck(request: Request, room: RoomRow): Promise<Response> {
+    const caller = await this.caller(request, room);
+    if (!caller || caller.role !== "host") return json({ error: "Presenter access is required." }, 401);
+    const loaded = await this.loadDeck(room);
+    return Response.json({ snapshotId: room.snapshot_id, deck: loaded?.deck ?? null }, { headers: { "Cache-Control": "private, max-age=3600" } });
   }
 
   private async envelopeFor(caller: Caller): Promise<Response> {
@@ -227,7 +250,7 @@ export class RoomHub {
     this.limit(`join:${request.headers.get("CF-Connecting-IP") ?? "local"}`, 60);
     const body = await readBody<{ nickname: string }>(request);
     const nickname = cleanText(body.nickname).replace(/\s+/g, " ");
-    if (nickname.length < 2 || nickname.length > 24) return json({ error: "Your name must be 2–24 characters." }, 400);
+    if (nickname.length < 2 || nickname.length > 24) return json({ error: "Your name must be 2â€“24 characters." }, 400);
     const count = await this.env.DB.prepare("SELECT COUNT(*) AS count FROM participants WHERE room_code = ?").bind(room.code).first<{ count: number }>();
     if ((count?.count ?? 0) >= MAX_PARTICIPANTS) return json({ error: `This room is full (${MAX_PARTICIPANTS} participants).` }, 409);
     const id = crypto.randomUUID();
@@ -255,7 +278,7 @@ export class RoomHub {
       if (existing.results.some((row) => row.request_id === id)) return this.envelopeFor({ role: "participant", participant });
       const current = await this.getRoom();
       if (current?.activity !== "writing") throw new HttpError(409, "Prompt submission is closed right now.");
-      if (prompt.length < PROMPT_MIN || prompt.length > PROMPT_MAX) throw new HttpError(400, `Your prompt must be ${PROMPT_MIN}–${PROMPT_MAX} characters.`);
+      if (prompt.length < PROMPT_MIN || prompt.length > PROMPT_MAX) throw new HttpError(400, `Your prompt must be ${PROMPT_MIN}â€“${PROMPT_MAX} characters.`);
       if (existing.results.length >= MAX_ATTEMPTS) throw new HttpError(409, `You have used all ${MAX_ATTEMPTS} attempts.`);
       const same = existing.results.find((row) => row.prompt_text === prompt);
       if (same) throw new HttpError(409, `This prompt is identical to attempt ${same.attempt}. Change something before submitting again.`);
@@ -355,13 +378,18 @@ export class RoomHub {
     const now = new Date().toISOString();
     const active = s.battles.find((battle) => battle.id === room.active_battle_id) ?? null;
     const setRoom = (sql: string, ...values: unknown[]) => db.prepare(`UPDATE rooms SET ${sql} WHERE code = ?`).bind(...values, this.code);
+    // Move the projector to the slide holding a live widget; decks without one stay where they are.
+    const jumpTo = (kind: WidgetKind) => {
+      const index = s.meta.widgetSlides[kind];
+      return Number.isInteger(index) ? `current_slide = ${Number(index)}, slide_step = 0` : "current_slide = current_slide";
+    };
 
     switch (body.action) {
       case "slide": {
         const index = Number(body.index);
         const step = Number(body.step ?? 0);
-        if (!Number.isInteger(index) || index < 0 || index >= TOTAL_SLIDES) throw new HttpError(400, "Slide number is out of range.");
-        if (!Number.isInteger(step) || step < 0 || step > SLIDE_STEPS[index]) throw new HttpError(400, "Slide step is out of range.");
+        if (!Number.isInteger(index) || index < 0 || index >= s.meta.steps.length) throw new HttpError(400, "Slide number is out of range.");
+        if (!Number.isInteger(step) || step < 0 || step > s.meta.steps[index]) throw new HttpError(400, "Slide step is out of range.");
         await setRoom("current_slide = ?, slide_step = ?", index, step).run();
         return;
       }
@@ -369,7 +397,7 @@ export class RoomHub {
         if (!["waiting", "writing", "writing_closed"].includes(body.activity)) throw new HttpError(400, "Unknown activity.");
         if (s.battles.length) throw new HttpError(409, "Battles have started. Prompt writing can no longer be reopened.");
         const statements = [setRoom("activity = ?", body.activity), this.logAction(`activity:${body.activity}`)];
-        if (body.activity === "writing") statements.push(setRoom("current_slide = 4, slide_step = 0"));
+        if (body.activity === "writing") statements.push(setRoom(jumpTo("challenge")));
         await db.batch(statements);
         return;
       }
@@ -398,7 +426,7 @@ export class RoomHub {
           group.forEach((item, order) => statements.push(db.prepare(`INSERT INTO battle_entries (id, battle_id, submission_id, participant_id, display_order)
             VALUES (?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), battleId, item.submissionId, item.participantId, order + 1)));
         });
-        statements.push(setRoom("activity = 'battle', active_battle_id = ?, current_slide = 5, slide_step = 0", firstBattle));
+        statements.push(setRoom(`activity = 'battle', active_battle_id = ?, ${jumpTo("battle")}`, firstBattle));
         statements.push(this.logAction("generate_battles", { prompts: finals.size, groups: groups.map((group) => group.length), autoSelected: autoSelections.length }));
         await db.batch(statements);
         return;
@@ -407,7 +435,7 @@ export class RoomHub {
         if (!active || active.status !== "pending") throw new HttpError(409, "There is no battle waiting to open.");
         await db.batch([
           db.prepare("UPDATE battles SET status = 'open', opened_at = ? WHERE id = ? AND status = 'pending'").bind(now, active.id),
-          setRoom("current_slide = 5, slide_step = 0"),
+          setRoom(jumpTo("battle")),
           this.logAction("open_voting", { battle: `${active.round}-${active.sequence}` }),
         ]);
         return;
@@ -437,20 +465,20 @@ export class RoomHub {
         if (active && active.status !== "revealed") throw new HttpError(409, "Reveal the current battle before moving on.");
         const next = orderedBattles(s.battles).find((battle) => battle.round === "mini" && battle.status === "pending");
         if (!next) throw new HttpError(409, "All mini battles are complete. Start the Grand Final next.");
-        await db.batch([setRoom("active_battle_id = ?, current_slide = 5, slide_step = 0", next.id), this.logAction("next_battle", { battle: `mini-${next.sequence}` })]);
+        await db.batch([setRoom(`active_battle_id = ?, ${jumpTo("battle")}`, next.id), this.logAction("next_battle", { battle: `mini-${next.sequence}` })]);
         return;
       }
       case "start_final": {
         const summary = finalSummary(s);
         if (summary.status !== "ready") throw new HttpError(409, summary.status === "not_ready" ? "Reveal every mini battle before the Grand Final." : "The Grand Final has already started.");
         const finalists = s.entries.filter((entry) => entry.is_winner === 1 && s.battles.find((battle) => battle.id === entry.battle_id)?.round === "mini");
-        await db.batch(this.createFinalBattle(finalists, 1, now, "start_final"));
+        await db.batch(this.createFinalBattle(finalists, 1, now, "start_final", jumpTo("battle")));
         return;
       }
       case "start_tiebreak": {
         const summary = finalSummary(s);
         if (summary.status !== "tie" || !summary.latest) throw new HttpError(409, "A tie-break is only available after a tied Grand Final.");
-        await db.batch(this.createFinalBattle(summary.winners, summary.latest.sequence + 1, now, "start_tiebreak"));
+        await db.batch(this.createFinalBattle(summary.winners, summary.latest.sequence + 1, now, "start_tiebreak", jumpTo("battle")));
         return;
       }
       case "accept_shared": {
@@ -470,7 +498,7 @@ export class RoomHub {
         const latestFinal = finalSummary(s).latest;
         if (battle.round === "final" && latestFinal?.id !== battle.id) throw new HttpError(409, "Only the latest Grand Final round can be resolved.");
         const reason = cleanText(body.reason);
-        if (reason.length < 3 || reason.length > 300) throw new HttpError(400, "Give a reason of 3–300 characters for the manual decision.");
+        if (reason.length < 3 || reason.length > 300) throw new HttpError(400, "Give a reason of 3â€“300 characters for the manual decision.");
         const entryIds = new Set(entriesOf(s, battle.id).map((entry) => entry.id));
         const winners = Array.isArray(body.winnerEntryIds) ? [...new Set(body.winnerEntryIds.map(String))] : [];
         if (!winners.length || winners.some((id) => !entryIds.has(id))) throw new HttpError(400, "Choose at least one winner from this battle.");
@@ -484,7 +512,7 @@ export class RoomHub {
       }
       case "show_results": {
         if (finalSummary(s).status !== "complete") throw new HttpError(409, "Finish the Grand Final (or resolve its tie) before showing the leaderboard.");
-        await db.batch([setRoom("activity = 'results', current_slide = 6, slide_step = 0"), this.logAction("show_results")]);
+        await db.batch([setRoom(`activity = 'results', ${jumpTo("leaderboard")}`), this.logAction("show_results")]);
         return;
       }
       case "start_feedback": {
@@ -498,7 +526,7 @@ export class RoomHub {
     }
   }
 
-  private createFinalBattle(finalists: EntryRow[], sequence: number, now: string, action: string): D1PreparedStatement[] {
+  private createFinalBattle(finalists: EntryRow[], sequence: number, now: string, action: string, slideSql: string): D1PreparedStatement[] {
     const db = this.env.DB;
     if (!finalists.length) throw new HttpError(409, "No finalists were found.");
     const battleId = crypto.randomUUID();
@@ -510,7 +538,7 @@ export class RoomHub {
         .bind(battleId, this.code, sequence, single ? "revealed" : "pending", single ? "Only one finalist, so they win by default." : "", now, single ? now : null),
       ...ordered.map((entry, index) => db.prepare(`INSERT INTO battle_entries (id, battle_id, submission_id, participant_id, display_order, is_winner)
         VALUES (?, ?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), battleId, entry.submission_id, entry.participant_id, index + 1, single ? 1 : 0)),
-      db.prepare("UPDATE rooms SET active_battle_id = ?, current_slide = 5, slide_step = 0 WHERE code = ?").bind(battleId, this.code),
+      db.prepare(`UPDATE rooms SET active_battle_id = ?, ${slideSql} WHERE code = ?`).bind(battleId, this.code),
       this.logAction(action, { finalists: finalists.length, sequence }),
     ];
   }
@@ -544,7 +572,7 @@ export class RoomHub {
         row?.finalVotes ?? "", row?.finalEligible ?? "", row?.finalScore ?? "", row?.stage ?? "", row?.rank ?? "", notes];
     });
     const csv = [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
-    return new Response(`﻿${csv}`, {
+    return new Response(`ï»¿${csv}`, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="4seas-${room.code.toLowerCase()}-prompt-battle.csv"`,
@@ -566,7 +594,7 @@ export class RoomHub {
     const answers: Record<string, string> = {};
     for (const [key, label] of Object.entries(required)) {
       const value = cleanText(body[key]);
-      if (!value) throw new HttpError(400, `Answer the ${label} question. Type "None" or "ไม่มี" if nothing applies.`);
+      if (!value) throw new HttpError(400, `Answer the ${label} question. Type "None" or "à¹„à¸¡à¹ˆà¸¡à¸µ" if nothing applies.`);
       if (value.length > FEEDBACK_TEXT_MAX) throw new HttpError(400, `Keep each answer under ${FEEDBACK_TEXT_MAX} characters.`);
       answers[key] = value;
     }
@@ -629,7 +657,7 @@ export class RoomHub {
         row?.workChallenges ?? "", row?.supportNeeded ?? "", row?.trainingRequests ?? "", row?.otherComments ?? ""];
     });
     const csv = [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
-    return new Response(`﻿${csv}`, {
+    return new Response(`ï»¿${csv}`, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="4seas-${room.code.toLowerCase()}-weekly-feedback.csv"`,

@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { Maximize } from "lucide-react";
 import { joinUrlFor, useFullscreen } from "./PresenterScreen";
-import { Slide, SlideStage } from "./slides/Deck";
+import { SlideStage } from "./slides/Deck";
+import { PresentedSlide, useDeck } from "./slides/PresentedSlide";
 import type { Language } from "./shared/types";
 import { useRoom } from "./useRoom";
 import { Brand, Notice, t } from "./ui";
@@ -9,6 +10,7 @@ import { Brand, Notice, t } from "./ui";
 /** Audience display: mirrors the presenter's slide and step, with no controls. */
 export default function ProjectorScreen({ code, token, language }: { code: string; token: string; language: Language }) {
   const { room, error, expired } = useRoom(code, token);
+  const { deck } = useDeck(code, token, room?.state.snapshotId);
   const fullscreen = useFullscreen();
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function ProjectorScreen({ code, token, language }: { code: strin
 
   return <main><div className="projector" ref={fullscreen.ref}>
     <SlideStage className="stage--full">
-      <Slide index={room.state.currentSlide} step={room.state.slideStep} language={language} state={room.state} joinUrl={joinUrlFor(code)} />
+      <PresentedSlide state={room.state} deck={deck} language={language} joinUrl={joinUrlFor(code)} />
     </SlideStage>
     {!fullscreen.active && <button className="btn projector-fs" onClick={fullscreen.toggle}><Maximize size={15} />{t(language, "Fullscreen (F)", "เต็มจอ (F)")}</button>}
   </div></main>;

@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { BarChart3, CalendarDays, LayoutDashboard, Library as LibraryIcon, LogOut, MessageSquareText, PanelsTopLeft, Plus, Radio, ArrowRight, LockKeyhole } from "lucide-react";
+import { BarChart3, CalendarDays, LayoutDashboard, Library as LibraryIcon, LogOut, MessageSquareText, PanelsTopLeft, Plus, Radio, LockKeyhole } from "lucide-react";
 import type { Language } from "../shared/types";
 import type { Theme } from "../theme";
 import { Brand, Cmd, Cursor, LanguageSwitch, Notice, TerminalWindow, ThemeToggle, t } from "../ui";
 import { SESSION_ENDED, adminApi, adminToken, type Dashboard } from "./adminApi";
 import Builder from "./Builder";
 import Library from "./Library";
+import LiveSessions from "./LiveSessions";
+import Planner from "./Planner";
 
 type Section = "dashboard" | "planner" | "library" | "builder" | "live" | "feedback" | "history";
 
 const SECTIONS: Array<{ id: Section; en: string; th: string; icon: ReactNode; phase?: number }> = [
   { id: "dashboard", en: "Dashboard", th: "ภาพรวม", icon: <LayoutDashboard size={17} /> },
-  { id: "planner", en: "Weekly Planner", th: "แผนรายสัปดาห์", icon: <CalendarDays size={17} />, phase: 4 },
+  { id: "planner", en: "Weekly Planner", th: "แผนรายสัปดาห์", icon: <CalendarDays size={17} /> },
   { id: "library", en: "Lesson Library", th: "คลังบทเรียน", icon: <LibraryIcon size={17} /> },
   { id: "builder", en: "Slide Builder", th: "สร้างสไลด์", icon: <PanelsTopLeft size={17} /> },
-  { id: "live", en: "Live Sessions", th: "ห้องเรียนสด", icon: <Radio size={17} />, phase: 4 },
+  { id: "live", en: "Live Sessions", th: "ห้องเรียนสด", icon: <Radio size={17} /> },
   { id: "feedback", en: "Feedback", th: "แบบสอบถาม", icon: <MessageSquareText size={17} />, phase: 5 },
   { id: "history", en: "Training History", th: "ประวัติการอบรม", icon: <BarChart3 size={17} />, phase: 5 },
 ];
@@ -91,16 +93,8 @@ export default function AdminApp({ language, onLanguage, theme, onTheme, navigat
       {section === "dashboard" && <DashboardView language={language} go={go} />}
       {section === "library" && <Library language={language} onEdit={openBuilder} />}
       {section === "builder" && <Builder language={language} lessonId={target.lessonId} slideId={target.slideId} onOpen={openBuilder} />}
-      {section === "planner" && <Coming language={language} title="Weekly Planner" phase={4} items={[
-        "Create a weekly plan: title, date, duration, notes and the Prompt Battle challenge",
-        "Pick slides from any lesson and reorder them",
-        "Duplicate last week's plan, save draft, preview, publish",
-        "Publishing freezes a versioned snapshot, so later library edits never change history",
-      ]} />}
-      {section === "live" && <Coming language={language} title="Live Sessions" phase={4} items={[
-        "Start a room from a published plan; Presenter Mode will show its snapshot",
-        "Today: rooms use the built-in Week 01 deck — create one from the home page",
-      ]} action={<button className="btn" onClick={() => navigate("/")}>{t(language, "Open presenter start page", "ไปหน้าเริ่มห้องผู้สอน")}<ArrowRight size={15} /></button>} />}
+      {section === "planner" && <Planner language={language} />}
+      {section === "live" && <LiveSessions language={language} navigate={navigate} />}
       {section === "feedback" && <Coming language={language} title="Feedback" phase={5} items={[
         "Completion and average rating across sessions, with management-only individual answers",
         "Today: each session's feedback is in Presenter → Feedback (status, CSV, answers)",

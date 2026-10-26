@@ -49,7 +49,7 @@ Slides 5–7 are live screens. Slide 5 shows the challenge, room code, QR code a
 
 ## Training Studio (admin workspace)
 
-Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. It includes the Dashboard, the Lesson Library (create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, preview) and the visual **Slide Builder** (drag, resize, snapping, inline text editing, shapes, windows, live widgets, **images and background images** stored in R2, layers, reveal steps, undo/redo, autosave with conflict handling, fullscreen preview). Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The Weekly Planner, visual Slide Builder, live snapshots, and cross-session reports arrive in later phases; see `docs/STUDIO-PLAN.md`.
+Open `/?view=admin` (or use the link at the bottom of the home page) and sign in with `ADMIN_PASSPHRASE`. This is a separate secret from the presenter passphrase. It includes the Dashboard, the Lesson Library (create lessons, add slides from 9 templates, import the Week 01 starter lesson, rename, reorder, duplicate, delete, archive, preview) and the visual **Slide Builder** (drag, resize, snapping, inline text editing, shapes, windows, live widgets, **images and background images** stored in R2, layers, reveal steps, undo/redo, autosave with conflict handling, fullscreen preview). Slides are stored as validated JSON (`src/shared/slideDoc.ts`), never HTML. The **Weekly Planner** assembles a session from library slides plus that week's Prompt Battle challenge. **Publishing** freezes a versioned snapshot, and **Live Sessions** starts a room from it: Presenter Mode and the projector then show those exact slides, with live widgets (QR and code, stats, challenge, battle, leaderboard, feedback completion) wired to the room. Later edits to the library never change a published version or a running room. Rooms created from the home page still use the built-in Week 01 deck. Cross-session reports and history arrive in Phase 5; see `docs/STUDIO-PLAN.md`.
 
 ## Checks
 
@@ -57,6 +57,7 @@ Open `/?view=admin` (or use the link at the bottom of the home page) and sign in
 - `pnpm typecheck:worker` typechecks the Worker and Durable Object.
 - `pnpm build` typechecks and builds the browser app.
 - `pnpm smoke` runs the end-to-end HTTP + WebSocket workflow against a **local** `wrangler dev`. Set `SMOKE_HOST_PASSPHRASE` first. It refuses to run against non-local hosts.
+- `pnpm smoke:studio` runs the planner, publishing, snapshot-stability and snapshot-room checks (needs both `SMOKE_ADMIN_PASSPHRASE` and `SMOKE_HOST_PASSPHRASE`).
 - `pnpm smoke:admin` runs the admin API checks (auth, lessons, slides, validation, version conflicts, reorder, seed) against local `wrangler dev`. Set `SMOKE_ADMIN_PASSPHRASE` first.
 
 ## Deploy to Cloudflare

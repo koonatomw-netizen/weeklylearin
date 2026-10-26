@@ -3,7 +3,7 @@ import { Check, CircleCheck, Copy, LoaderCircle, Lock, Send, Trophy, WifiOff } f
 import { castVote, newRequestId, saveChecklist, selectFinal, submitPrompt, tokens } from "./api";
 import { WeeklyFeedback } from "./FeedbackForm";
 import { battleTitle } from "./slides/Deck";
-import { FIVE_PARTS, WEEK01_CHALLENGE } from "./shared/challenge";
+import { FIVE_PARTS } from "./shared/challenge";
 import type { BattleView, Checklist, Language, OwnSubmission, ParticipantSelf, RoomEnvelope, SessionState } from "./shared/types";
 import { MAX_ATTEMPTS, PROMPT_MAX, PROMPT_MIN } from "./shared/types";
 import type { Theme } from "./theme";
@@ -74,12 +74,13 @@ function Waiting({ state, language }: { state: SessionState; language: Language 
 
 // ------------------------------------------------------------------ writing
 
-function ChallengeCard({ language }: { language: Language }) {
+function ChallengeCard({ state, language }: { state: SessionState; language: Language }) {
+  const challenge = state.challenge;
   return <TerminalWindow title="challenge.md" className="p-card">
-    <p className="p-eyebrow">week 01 · {WEEK01_CHALLENGE.titleEn}</p>
-    <p className="p-copy">{t(language, WEEK01_CHALLENGE.scenarioEn, WEEK01_CHALLENGE.scenarioTh)}</p>
+    <p className="p-eyebrow">{t(language, challenge.titleEn, challenge.titleTh)}</p>
+    <p className="p-copy">{t(language, challenge.scenarioEn, challenge.scenarioTh)}</p>
     <Cmd>{t(language, "task", "โจทย์")}</Cmd>
-    <p className="p-copy p-copy--strong">{t(language, WEEK01_CHALLENGE.taskEn, WEEK01_CHALLENGE.taskTh)}</p>
+    <p className="p-copy p-copy--strong">{t(language, challenge.taskEn, challenge.taskTh)}</p>
   </TerminalWindow>;
 }
 
@@ -125,7 +126,7 @@ function Writing({ state, me, code, token, language, setRoom, open }: {
   }
 
   return <>
-    <ChallengeCard language={language} />
+    <ChallengeCard state={state} language={language} />
     <div className="attempts-bar">
       <span className="attempt-dots attempt-dots--lg">{Array.from({ length: MAX_ATTEMPTS }, (_, index) => <i key={index} className={index < me.submissions.length ? "is-on" : ""} />)}</span>
       <span>{remaining > 0 ? t(language, `${remaining} of ${MAX_ATTEMPTS} attempts left`, `เหลือ ${remaining} จาก ${MAX_ATTEMPTS} ครั้ง`) : t(language, "All attempts used", "ใช้ครบทุกครั้งแล้ว")}</span>

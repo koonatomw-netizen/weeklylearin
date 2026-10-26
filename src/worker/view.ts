@@ -1,5 +1,5 @@
 import { battleScore, buildLeaderboard, rankByVotes } from "../shared/battle";
-import { SESSION_TITLE, SLIDE_STEPS, TOTAL_SLIDES } from "../shared/challenge";
+import type { DeckMeta } from "../shared/deck";
 import type {
   Activity, BattleRound, BattleStatus, BattleView, Checklist, FeedbackSummary, FinalStatus, HostState,
   ParticipantSelf, Role, RoomEnvelope, SessionState,
@@ -14,6 +14,7 @@ export interface RoomRow {
   slide_step: number;
   activity: Activity;
   active_battle_id: string | null;
+  snapshot_id: string | null;
 }
 export interface ParticipantRow { id: string; nickname: string; joined_at: string }
 export interface SubmissionRow { id: string; participant_id: string; attempt: number; prompt_text: string; request_id: string; checklist_json: string; submitted_at: string }
@@ -35,6 +36,8 @@ export interface Snapshot {
   votes: VoteRow[];
   actions: ActionRow[];
   feedback: FeedbackStatusRow[];
+  /** Navigation info for the deck this room presents (built-in or published snapshot). */
+  meta: DeckMeta;
 }
 
 export const entryLabel = (index: number) => String.fromCharCode(65 + (index % 26));
@@ -164,14 +167,19 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
   }
 
   const submittedIds = new Set(s.submissions.map((submission) => submission.participant_id));
-  const slide = Math.min(Math.max(0, s.room.current_slide), TOTAL_SLIDES - 1);
+  const total = Math.max(1, s.meta.steps.length);
+  const slide = Math.min(Math.max(0, s.room.current_slide), total - 1);
   const state: SessionState = {
     code: s.room.code,
-    title: SESSION_TITLE,
+    title: s.meta.title,
     createdAt: s.room.created_at,
     activity: s.room.activity,
+    snapshotId: s.room.snapshot_id ?? null,
+    totalSlides: total,
+    slideSteps: s.meta.steps,
+    challenge: s.meta.challenge,
     currentSlide: slide,
-    slideStep: Math.min(Math.max(0, s.room.slide_step), SLIDE_STEPS[slide]),
+    slideStep: Math.min(Math.max(0, s.room.slide_step), s.meta.steps[slide] ?? 0),
     participantCount: s.participants.length,
     submittedCount: submittedIds.size,
     totalSubmissions: s.submissions.length,

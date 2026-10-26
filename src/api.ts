@@ -1,3 +1,4 @@
+import type { PublishedDeck } from "./shared/deck";
 import type { Checklist, ControlAction, FeedbackAnswers, FeedbackResponse, RoomEnvelope } from "./shared/types";
 
 export class ApiError extends Error {
@@ -51,6 +52,9 @@ export const castVote = (code: string, token: string, battleId: string, entryId:
 
 export const control = (code: string, token: string, action: ControlAction) =>
   jsonRequest<RoomEnvelope>(room(code, "control"), { method: "POST", headers: auth(token), body: JSON.stringify(action) });
+
+export const getDeck = (code: string, token: string) =>
+  jsonRequest<{ snapshotId: string | null; deck: PublishedDeck | null }>(room(code, "deck"), { headers: auth(token) });
 
 export const submitFeedback = (code: string, token: string, answers: FeedbackAnswers) =>
   jsonRequest<RoomEnvelope>(room(code, "feedback"), { method: "POST", headers: auth(token), body: JSON.stringify(answers) });

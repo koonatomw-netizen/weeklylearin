@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Crown, Trophy, Users, X } from "lucide-react";
-import { FIVE_PARTS, WEEK01_CHALLENGE } from "../shared/challenge";
+import { FIVE_PARTS } from "../shared/challenge";
 import type { BattleView, ChecklistKey, Language, SessionState } from "../shared/types";
 import { BrandMark, Cmd, Cursor, QRStamp, TerminalWindow, WindowDots, formatCode, t } from "../ui";
 
-export type BattleCommand = "open_voting" | "close_voting" | "reveal" | "next_battle" | "start_final" | "start_tiebreak" | "accept_shared" | "show_results";
+export type BattleCommand = "open_voting" | "close_voting" | "reveal" | "next_battle" | "start_final" | "start_tiebreak" | "accept_shared" | "show_results" | "start_feedback";
 
 export interface SlideProps {
   index: number;
@@ -222,7 +222,7 @@ function AnatomySlide({ step, language }: SlideProps) {
 
 // ------------------------------------------------------ 05 Live challenge
 
-const activityLabel = (state: SessionState, language: Language) => ({
+export const activityLabel = (state: SessionState, language: Language) => ({
   waiting: t(language, "Waiting to start", "รอเริ่มกิจกรรม"),
   writing: t(language, "Submissions open", "เปิดรับพรอมป์"),
   writing_closed: t(language, "Submissions closed", "ปิดรับพรอมป์แล้ว"),
@@ -235,12 +235,12 @@ function ChallengeSlide({ state, joinUrl, language }: SlideProps) {
   return <SlideFrame kicker={t(language, "live challenge", "โจทย์สด")} number={5} language={language}>
     <div className="challenge">
       <div className="challenge-main">
-        <p className="slide-eyebrow">// week 01 · {WEEK01_CHALLENGE.titleEn.toLowerCase()}</p>
+        <p className="slide-eyebrow">// week 01 · {state.challenge.titleEn.toLowerCase()}</p>
         <h2>Live Prompt Challenge</h2>
         <TerminalWindow className="challenge-term" title="challenge.md">
-          <p className="challenge-scenario">{t(language, WEEK01_CHALLENGE.scenarioEn, WEEK01_CHALLENGE.scenarioTh)}</p>
+          <p className="challenge-scenario">{t(language, state.challenge.scenarioEn, state.challenge.scenarioTh)}</p>
           <Cmd>{t(language, "task", "โจทย์")}</Cmd>
-          <p className="challenge-task">{t(language, WEEK01_CHALLENGE.taskEn, WEEK01_CHALLENGE.taskTh)}</p>
+          <p className="challenge-task">{t(language, state.challenge.taskEn, state.challenge.taskTh)}</p>
           <p className="challenge-rules mono-dim">max 3 attempts · self-check · pick your best · battle</p>
         </TerminalWindow>
         <div className="live-stats">
@@ -292,11 +292,20 @@ export function nextCommand(state: SessionState): { command: BattleCommand; en: 
   return null;
 }
 
-function BattleSlide({ state, language, onCommand, busy }: SlideProps) {
+function BattleSlide(props: SlideProps) {
+  const battle = props.state.battles.find((item) => item.id === props.state.activeBattleId);
+  return <SlideFrame kicker={battle?.round === "final" ? "grand final" : "prompt battle"} number={6} language={props.language}>
+    <BattleBoard {...props} />
+  </SlideFrame>;
+}
+
+type BoardProps = Pick<SlideProps, "state" | "language" | "onCommand" | "busy">;
+
+/** Active battle: anonymous cards, vote progress, animated reveal, presenter's next action. */
+export function BattleBoard({ state, language, onCommand, busy }: BoardProps) {
   const battle = state.battles.find((item) => item.id === state.activeBattleId);
   if (!battle) {
-    return <SlideFrame kicker="prompt battle" number={6} language={language}>
-      <div className="battle-empty">
+    return <div className="battle-empty">
         <p className="slide-eyebrow">// {t(language, "peer voting", "โหวตโดยเพื่อนร่วมทีม")}</p>
         <h2>Prompt Battle</h2>
         <TerminalWindow title="battle.log" className="battle-empty-term">
@@ -308,15 +317,13 @@ function BattleSlide({ state, language, onCommand, busy }: SlideProps) {
             <li>{t(language, "You cannot vote in a battle that contains your own prompt.", "โหวตในแบทเทิลที่มีพรอมป์ของตัวเองไม่ได้")}</li>
           </ul>
         </TerminalWindow>
-      </div>
-    </SlideFrame>;
+      </div>;
   }
   const revealed = battle.status === "revealed";
   const progress = battle.eligibleVoters ? Math.min(100, (battle.votesCast / battle.eligibleVoters) * 100) : 0;
   const next = onCommand ? nextCommand(state) : null;
   const dense = battle.entries.length > 4;
-  return <SlideFrame kicker={battle.round === "final" ? "grand final" : "prompt battle"} number={6} language={language}>
-    <div className="battle">
+  return <div className="battle">
       <div className="battle-head">
         <div>
           <p className="slide-eyebrow">// {t(language, "community vote — not an AI score", "คะแนนจากการโหวต ไม่ใช่คะแนนจาก AI")}</p>
@@ -354,18 +361,24 @@ function BattleSlide({ state, language, onCommand, busy }: SlideProps) {
           : t(language, "Competitors in this battle cannot vote in it. Everyone else: vote on your phone.", "เจ้าของพรอมป์ในแบทเทิลนี้โหวตไม่ได้ คนอื่นโหวตผ่านมือถือได้เลย")}</p>
         {next && <button className="btn btn--accent btn--lg" disabled={busy} onClick={() => onCommand?.(next.command)}>{t(language, next.en, next.th)}</button>}
       </div>
-    </div>
-  </SlideFrame>;
+    </div>;
 }
 
 // ------------------------------------------------------------ 07 Final results
 
-function ResultsSlide({ state, language, onCommand, busy }: SlideProps) {
+function ResultsSlide(props: SlideProps) {
+  return <SlideFrame kicker={t(props.language, "final results", "ผลสุดท้าย")} number={7} language={props.language}>
+    <ResultsBoard {...props} takeaways />
+  </SlideFrame>;
+}
+
+/** Champion prompt and final rankings; before the Grand Final ends, a waiting panel. */
+export function ResultsBoard({ state, language, onCommand, busy, takeaways = false }: BoardProps & { takeaways?: boolean }) {
   const complete = state.finalStatus === "complete";
   const champion = state.champions[0];
   const rows = state.leaderboard.slice(0, 7);
   const next = onCommand ? nextCommand(state) : null;
-  return <SlideFrame kicker={t(language, "final results", "ผลสุดท้าย")} number={7} language={language}>
+  return <>
     {complete && champion ? <div className="results">
       <div className="results-left">
         <p className="slide-eyebrow">// {state.champions.length > 1 ? t(language, "shared champions", "แชมป์ร่วม") : t(language, "champion prompt", "พรอมป์แชมป์")}</p>
@@ -374,11 +387,11 @@ function ResultsSlide({ state, language, onCommand, busy }: SlideProps) {
           <p className="champion-prompt">{champion.promptText}</p>
           {state.champions.length > 1 && <p className="mono-dim">+ {state.champions.length - 1} {t(language, "more tied prompt(s) share the title", "พรอมป์ที่เสมอกันได้แชมป์ร่วม")}</p>}
         </TerminalWindow>
-        <ul className="takeaways">
+        {takeaways && <ul className="takeaways">
           <li><span>01</span>{t(language, "Give context and a role before the task.", "ให้บริบทและบทบาทก่อนสั่งงาน")}</li>
           <li><span>02</span>{t(language, "Name the goal, the reader, and the tone.", "บอกเป้าหมาย ผู้อ่าน และน้ำเสียง")}</li>
           <li><span>03</span>{t(language, "Set limits and a format — then iterate.", "กำหนดขอบเขตและรูปแบบ แล้วปรับให้ดีขึ้น")}</li>
-        </ul>
+        </ul>}
       </div>
       <div className="results-right">
         <h2 className="results-title">{t(language, "Final Rankings", "อันดับสุดท้าย")}</h2>
@@ -404,5 +417,5 @@ function ResultsSlide({ state, language, onCommand, busy }: SlideProps) {
         {next && <button className="btn btn--accent btn--lg" disabled={busy} onClick={() => onCommand?.(next.command)}>{t(language, next.en, next.th)}</button>}
       </TerminalWindow>
     </div>}
-  </SlideFrame>;
+  </>;
 }

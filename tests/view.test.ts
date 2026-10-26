@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LEGACY_META } from "../src/shared/deck";
 import { buildEnvelope, finalSummary, type Snapshot } from "../src/worker/view";
 
 function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -8,7 +9,8 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     request_id: `req-${participant.id}`, checklist_json: "{}", submitted_at: "2026-01-01T00:01:00Z",
   }));
   return {
-    room: { code: "123456", title: "t", host_token_hash: "x", created_at: "2026", current_slide: 5, slide_step: 0, activity: "battle", active_battle_id: "b1" },
+    room: { code: "123456", title: "t", host_token_hash: "x", created_at: "2026", current_slide: 5, slide_step: 0, activity: "battle", active_battle_id: "b1", snapshot_id: null },
+    meta: LEGACY_META,
     participants,
     submissions,
     finals: submissions.map((submission) => ({ participant_id: submission.participant_id, submission_id: submission.id, auto_selected: 0 })),

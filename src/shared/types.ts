@@ -1,3 +1,6 @@
+import type { Challenge } from "./deck";
+
+export type { Challenge };
 export type Language = "en" | "th";
 export type Role = "host" | "participant";
 
@@ -100,6 +103,11 @@ export interface SessionState {
   title: string;
   createdAt: string;
   activity: Activity;
+  /** Published deck this room presents; null = the built-in Week 01 deck. */
+  snapshotId: string | null;
+  totalSlides: number;
+  slideSteps: number[];
+  challenge: Challenge;
   currentSlide: number;
   slideStep: number;
   participantCount: number;

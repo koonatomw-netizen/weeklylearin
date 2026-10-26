@@ -1,6 +1,8 @@
 import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, detectImage } from "../shared/imageInfo";
 import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDoc";
 import { TEMPLATE_IDS, createFromTemplate, week01Lesson, type TemplateId } from "../shared/templates";
+import { HttpError, cleanLine, json, readBody } from "./http";
+import { handlePlans } from "./plans";
 import { randomSecret, sha256, type Env } from "./room-hub";
 
 /** Admin workspace API. Every route except login requires a valid admin session. */
@@ -8,42 +10,11 @@ import { randomSecret, sha256, type Env } from "./room-hub";
 const SESSION_HOURS = 12;
 const STARTER_LESSON_ID = "week01-starter";
 
-class HttpError extends Error {
-  constructor(readonly status: number, message: string) { super(message); }
-}
-
-function json(data: unknown, status = 200): Response {
-  return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-}
-
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let difference = 0;
   for (let i = 0; i < a.length; i += 1) difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return difference === 0;
-}
-
-function cleanLine(value: unknown, max: number, label: string, required = false): string {
-  if (value === undefined || value === null) {
-    if (required) throw new HttpError(400, `${label} is required.`);
-    return "";
-  }
-  if (typeof value !== "string") throw new HttpError(400, `${label} must be text.`);
-  const text = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
-  if (required && !text) throw new HttpError(400, `${label} is required.`);
-  if (text.length > max) throw new HttpError(400, `${label} must be at most ${max} characters.`);
-  return text;
-}
-
-async function readBody(request: Request, maxBytes = 300_000): Promise<Record<string, unknown>> {
-  if (Number(request.headers.get("Content-Length") ?? "0") > maxBytes) throw new HttpError(413, "Request is too large.");
-  const raw = await request.text();
-  if (raw.length > maxBytes) throw new HttpError(413, "Request is too large.");
-  if (!raw) return {};
-  try {
-    const body = JSON.parse(raw);
-    return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
-  } catch { throw new HttpError(400, "The request body could not be read."); }
 }
 
 const loginAttempts = new Map<string, { count: number; reset: number }>();
@@ -222,6 +193,10 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
       return json({ lesson: await getLesson(env, lessonId) });
     }
   }
+
+  // -------------------------------------------- plans, snapshots, live sessions
+  const planned = await handlePlans(path, method, request, env, audit);
+  if (planned) return planned;
 
   // ------------------------------------------------------------------- assets
   if (path === "/assets" && method === "GET") {
