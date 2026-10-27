@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CircleCheck, Copy, LoaderCircle, Lock, Send, Trophy, WifiOff } from "lucide-react";
 import { castVote, newRequestId, saveChecklist, selectFinal, submitPrompt, tokens } from "./api";
+import { PixelIcon } from "./case/PixelIcon";
 import { WeeklyFeedback } from "./FeedbackForm";
 import { battleTitle } from "./slides/Deck";
 import { FIVE_PARTS } from "./shared/challenge";
@@ -76,7 +77,9 @@ function Waiting({ state, language }: { state: SessionState; language: Language 
 
 function ChallengeCard({ state, language }: { state: SessionState; language: Language }) {
   const challenge = state.challenge;
-  return <TerminalWindow title="challenge.md" className="p-card">
+  const drawn = state.caseRoll;
+  return <TerminalWindow title="challenge.md" className={`p-card${drawn ? ` case-card case-card--${drawn.rarity}` : ""}`}>
+    {drawn && <PixelIcon situationId={drawn.situationId} size={72} />}
     <p className="p-eyebrow">{t(language, challenge.titleEn, challenge.titleTh)}</p>
     <p className="p-copy">{t(language, challenge.scenarioEn, challenge.scenarioTh)}</p>
     <Cmd>{t(language, "task", "โจทย์")}</Cmd>

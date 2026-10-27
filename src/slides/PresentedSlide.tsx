@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getDeck } from "../api";
+import { CaseReelOverlay } from "../case/CaseReelOverlay";
 import type { PublishedDeck } from "../shared/deck";
 import type { Language, SessionState } from "../shared/types";
 import { Slide, type BattleCommand } from "./Deck";
@@ -29,7 +30,15 @@ export function useDeck(code: string, token: string, snapshotId: string | null |
 }
 
 /** The slide currently presented: a published JSON slide with live widgets, or the built-in Week 01 deck. */
-export function PresentedSlide({ state, deck, language, joinUrl, onCommand, busy }: {
+/** The slide currently presented, with the case-opening overlay on top so the projector and presenter stage both show it. */
+export function PresentedSlide(props: Parameters<typeof PresentedSlideBody>[0]) {
+  return <>
+    <PresentedSlideBody {...props} />
+    <CaseReelOverlay state={props.state} language={props.language} />
+  </>;
+}
+
+function PresentedSlideBody({ state, deck, language, joinUrl, onCommand, busy }: {
   state: SessionState; deck: PublishedDeck | null; language: Language; joinUrl: string; onCommand?: (command: BattleCommand) => void; busy?: boolean;
 }) {
   if (!state.snapshotId) return <Slide index={state.currentSlide} step={state.slideStep} language={language} state={state} joinUrl={joinUrl} onCommand={onCommand} busy={busy} />;

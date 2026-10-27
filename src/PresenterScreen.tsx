@@ -258,7 +258,9 @@ function WritingControl({ state, language, busy, send }: { state: HostState; lan
         <div className="stat"><span>{t(language, "prompts", "พรอมป์")}</span><b>{state.totalSubmissions}</b></div>
         <div className="stat"><span>{t(language, "final picked", "เลือกแล้ว")}</span><b>{state.finalSelectedCount}</b></div>
       </div>
+      {state.totalSubmissions > 0 && !locked && <p className="hint">{t(language, "A new case can't be opened once prompts have been submitted.", "เปิดเคสใหม่ไม่ได้แล้ว เพราะมีผู้ส่งพรอมป์แล้ว")}</p>}
       <div className="button-row">
+        {state.activity !== "battle" && <button className="btn btn--ghost" disabled={busy || locked || state.totalSubmissions > 0} onClick={() => void send({ action: "open_case" })}><Shuffle size={15} />{state.caseRoll ? t(language, "Re-roll case", "สุ่มใหม่") : t(language, "Open case", "เปิดเคส")}</button>}
         {state.activity !== "writing" && <button className="btn btn--accent" disabled={busy || locked} onClick={() => void send({ action: "activity", activity: "writing" })}><Play size={15} />{state.activity === "writing_closed" ? t(language, "Reopen submission", "เปิดรับอีกครั้ง") : t(language, "Start prompt submission", "เริ่มรับพรอมป์")}</button>}
         {state.activity === "writing" && <button className="btn btn--danger" disabled={busy} onClick={() => void send({ action: "activity", activity: "writing_closed" })}><Square size={14} />{t(language, "Close prompt submission", "ปิดรับพรอมป์")}</button>}
         {(state.activity === "writing" || state.activity === "writing_closed") && <button className="btn btn--ghost" disabled={busy} onClick={() => void send({ action: "activity", activity: "waiting" })}>{t(language, "Back to waiting screen", "กลับหน้ารอ")}</button>}

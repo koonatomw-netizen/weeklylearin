@@ -1012,3 +1012,41 @@ blockquote.prompt-text { margin: 0; padding: 10px 12px; border-left: 3px solid v
   }
   .cursor { animation: none; }
 }
+
+/* ------------------------------------------------------------ case opening */
+.pixel-icon { image-rendering: pixelated; display: block; }
+.case-card { border-bottom: 5px solid var(--rarity, var(--border)); }
+.case-card .pixel-icon { margin: 0 auto 8px; }
+.case-card--common, .case-tile--common, .case-reveal--common { --rarity: #9ca3af; }
+.case-card--rare, .case-tile--rare, .case-reveal--rare { --rarity: #3b82f6; }
+.case-card--epic, .case-tile--epic, .case-reveal--epic { --rarity: #a855f7; }
+.case-card--legendary, .case-tile--legendary, .case-reveal--legendary { --rarity: #fbbf24; }
+.case-overlay {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 28px; padding: 24px; background: rgba(10, 12, 20, 0.92); color: #f9fafb; cursor: pointer;
+}
+.case-controls { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; cursor: default; }
+.case-viewport { position: relative; width: min(1100px, 100%); overflow: hidden; padding: 20px 0; background: #111827; border-radius: 12px; }
+.case-strip { position: relative; left: 50%; display: flex; gap: 10px; width: max-content; will-change: transform; }
+.case-line { position: absolute; z-index: 2; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: #facc15; box-shadow: 0 0 12px #facc15; }
+.case-tile {
+  flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; box-sizing: border-box; padding: 12px 8px;
+  height: 140px; border-radius: 8px; border-bottom: 5px solid var(--rarity); background: #1f2937; font: 600 13px var(--mono); text-align: center;
+}
+.case-reveal {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 560px; padding: 24px; text-align: center; cursor: default;
+  background: #1f2937; border-radius: 12px; border-bottom: 6px solid var(--rarity); box-shadow: 0 0 40px color-mix(in srgb, var(--rarity) 45%, transparent);
+  animation: case-pop 0.45s ease-out;
+}
+.case-reveal h2 { margin: 0; font-size: 28px; }
+.case-reveal p { margin: 0; font-size: 17px; line-height: 1.5; }
+.case-reveal.is-fade { animation: case-fade 0.6s ease-out; }
+.case-badge { padding: 2px 12px; border-radius: 99px; font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: #111827; background: var(--rarity, #9ca3af); }
+.case-badge--common { --rarity: #9ca3af; } .case-badge--rare { --rarity: #3b82f6; color: #fff; }
+.case-badge--epic { --rarity: #a855f7; color: #fff; } .case-badge--legendary { --rarity: #fbbf24; }
+@keyframes case-pop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes case-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .case-strip { transition: none !important; }
+  .case-reveal { animation: case-fade 0.4s ease-out; }
+}
