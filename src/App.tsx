@@ -32,6 +32,15 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePop);
   }, []);
 
+  // The projector is a separate window: follow a language change made in the presenter's window.
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "4seas:language") setLanguage(event.newValue === "th" ? "th" : "en");
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   useEffect(() => { document.documentElement.lang = language; }, [language]);
   useEffect(() => { void getConfig().then((config) => setHostReady(config.hostReady)).catch(() => setHostReady(null)); }, []);
 
