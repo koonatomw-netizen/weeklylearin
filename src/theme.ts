@@ -20,6 +20,15 @@ export function useTheme(defaultTheme?: Theme) {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#171717" : "#f7f4ef");
   }, [theme]);
 
+  // Other windows (e.g. the projector) follow a theme chosen in this origin's other tabs.
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === KEY && (event.newValue === "dark" || event.newValue === "light")) setThemeState(event.newValue);
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);
     try { localStorage.setItem(KEY, next); } catch { /* storage blocked */ }
