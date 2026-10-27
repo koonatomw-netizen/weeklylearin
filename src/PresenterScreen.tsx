@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { control, exportResults, getFeedbackResponses } from "./api";
 import { groupSizes } from "./shared/battle";
-import { SLIDE_TITLES } from "./shared/challenge";
+import { BUILT_IN_SLIDE_COUNT, SLIDE_TITLES } from "./shared/challenge";
 import { PresentedSlide, useDeck } from "./slides/PresentedSlide";
 import type { BattleView, ControlAction, FeedbackResponse, HostState, Language, RoomEnvelope } from "./shared/types";
 import { MAX_ATTEMPTS } from "./shared/types";
@@ -119,7 +119,7 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
   const total = state.totalSlides;
   const stepsHere = state.slideSteps[state.currentSlide] ?? 0;
   const slideTitles = deck ? deck.slides.map((slide) => slide.title || "Untitled") : SLIDE_TITLES;
-  const isLive = (index: number) => (deck ? deck.slides[index]?.doc.elements.some((element) => element.type === "widget") : index >= 4);
+  const isLive = (index: number) => (deck ? deck.slides[index]?.doc.elements.some((element) => element.type === "widget") : index >= 4 && index < BUILT_IN_SLIDE_COUNT);
   const notes = deck?.slides[state.currentSlide]?.doc.notes;
 
   async function downloadCsv(kind: "export" | "feedbackcsv" = "export") {

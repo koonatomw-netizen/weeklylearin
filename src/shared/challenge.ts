@@ -1,3 +1,5 @@
+import { stepCount } from "./slideDoc";
+import { skillsLesson } from "./templates";
 import type { ChecklistKey } from "./types";
 
 export const SESSION_TITLE = "Week 01 · Prompt Engineering";
@@ -53,8 +55,13 @@ export const FIVE_PARTS: Array<{
   },
 ];
 
+/** Slides 1-7 of the built-in deck are React components; the skills segment (Part 2) is appended as JSON slides. */
+export const BUILT_IN_SLIDE_COUNT = 7;
+let skillSlideId = 0;
+export const LEGACY_SKILL_SLIDES = skillsLesson(() => `sk${++skillSlideId}`);
+
 /** Number of presenter reveal steps on each slide (0 = no progressive reveal). */
-export const SLIDE_STEPS = [0, 5, 2, 5, 0, 0, 0];
+export const SLIDE_STEPS = [0, 5, 2, 5, 0, 0, 0, ...LEGACY_SKILL_SLIDES.map((slide) => stepCount(slide.doc))];
 export const SLIDE_TITLES = [
   "Welcome",
   "The Five-Part Formula",
@@ -63,5 +70,6 @@ export const SLIDE_TITLES = [
   "Live Prompt Challenge",
   "Prompt Battle",
   "Final Results",
+  ...LEGACY_SKILL_SLIDES.map((slide) => slide.title),
 ];
 export const TOTAL_SLIDES = SLIDE_STEPS.length;

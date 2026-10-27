@@ -19,7 +19,7 @@ describe("deckMeta", () => {
   });
 
   it("keeps the built-in deck layout for legacy rooms", () => {
-    expect(LEGACY_META.steps).toHaveLength(7);
+    expect(LEGACY_META.steps).toHaveLength(13);
     expect(LEGACY_META.widgetSlides.battle).toBe(5);
   });
 });

@@ -230,5 +230,156 @@ export function week01Lesson(id: MakeId): Array<{ title: string; doc: SlideDoc }
         ]),
       ]),
     },
+    ...skillsLesson(id),
+  ];
+}
+
+// ------------------------------------------------------------ skills segment
+
+const card = (id: MakeId, x: number, y: number, w: number, h: number, stroke: ColorToken, step?: number): SlideElement =>
+  ({ id: id(), type: "shape", shape: "rounded", x, y, w, h, fill: "surface", stroke, strokeWidth: 2, ...(step ? { step } : {}) });
+
+/**
+ * Part 2 of Week 01: reusable skills. Appended after Final Results in both the built-in deck and the
+ * Studio lesson. The grill-me and grilling quotes are the real SKILL.md text, so keep them verbatim.
+ */
+export function skillsLesson(id: MakeId): Array<{ title: string; doc: SlideDoc }> {
+  return [
+    {
+      title: "Skills: Write It Once",
+      doc: doc([
+        ...chrome(id, "skills"),
+        ...heading(id, "part 2 · reusable instructions", "Skills: Write It Once"),
+        card(id, 64, 270, 716, 440, "danger"),
+        text(id, 96, 300, 652, 380, [
+          para("A prompt", 40, { font: "mono", bold: true, color: "danger" }),
+          para("Telling someone what to cook every single time.", 32),
+          para("พรอมป์ = บอกทุกครั้งว่าจะให้ทำอะไร", 24, { color: "text-2" }),
+        ]),
+        card(id, 820, 270, 716, 440, "success"),
+        text(id, 852, 300, 652, 380, [
+          para("A skill", 40, { font: "mono", bold: true, color: "success" }),
+          para("A recipe card: write it once, use it again.", 32),
+          para("สกิล = สูตรที่เขียนครั้งเดียว ใช้ซ้ำได้ตลอด", 24, { color: "text-2" }),
+        ]),
+        text(id, 64, 740, 1472, 70, [para("Your best Prompt Battle prompt could become a skill.", 28, { font: "mono", color: "accent" })]),
+      ], "Open with the recipe-card idea. Prompts are one-off; skills are saved and reused."),
+    },
+    {
+      title: "What Is a Skill?",
+      doc: doc([
+        ...chrome(id, "skills"),
+        ...heading(id, "part 2 · reusable instructions", "What Is a Skill?"),
+        { id: id(), type: "window", title: "my-skill/", x: 64, y: 270, w: 700, h: 520 },
+        text(id, 100, 340, 628, 100, [para("my-skill/", 28, { font: "mono" }), para("└── SKILL.md", 28, { font: "mono", color: "accent" })]),
+        text(id, 100, 470, 628, 290, [
+          para("name: what it is called", 24, { font: "mono", color: "text-2" }),
+          para("description: when to use it", 24, { font: "mono", color: "text-2" }),
+          para("instructions: what Claude should do", 24, { font: "mono", color: "text-2" }),
+        ]),
+        text(id, 804, 270, 732, 520, [
+          para("A folder with one file: SKILL.md.", 32, { bullet: true }),
+          para("โฟลเดอร์ที่มีไฟล์เดียว: SKILL.md", 24, { color: "text-2" }),
+          para("Name + one-line description + plain-text instructions.", 32, { bullet: true }),
+          para("ชื่อ + คำอธิบายหนึ่งบรรทัด + คำสั่งแบบข้อความ", 24, { color: "text-2" }),
+          para("Claude loads it when it is relevant, or you call it by name, like /grill-me.", 32, { bullet: true }),
+          para("Claude โหลดเมื่อเกี่ยวข้อง หรือเรียกด้วยชื่อ เช่น /grill-me", 24, { color: "text-2" }),
+        ]),
+      ], "A skill is just text. Nothing magic: a folder, a file, and instructions."),
+    },
+    {
+      title: "Example: grill-me",
+      doc: doc([
+        ...chrome(id, "skills"),
+        ...heading(id, "a real skill, two real files", "Example: grill-me"),
+        { id: id(), type: "window", title: "grill-me/SKILL.md", x: 64, y: 260, w: 720, h: 420 },
+        text(id, 100, 330, 648, 330, [
+          para("---", 24, { font: "mono", color: "text-2" }),
+          para("name: grill-me", 24, { font: "mono" }),
+          para("description: A relentless interview to sharpen a plan or design.", 24, { font: "mono" }),
+          para("---", 24, { font: "mono", color: "text-2" }),
+          para('Call the Skill tool with "grilling".', 24, { font: "mono", color: "accent" }),
+        ]),
+        { id: id(), type: "window", title: "grilling/SKILL.md (what it does)", x: 824, y: 260, w: 712, h: 420 },
+        text(id, 860, 330, 640, 330, [
+          para('"Interview the user relentlessly until you reach a shared understanding."', 24, { font: "mono" }),
+          para('"Ask the whole frontier in one round: number each question and give your recommended answer."', 24, { font: "mono" }),
+          para('"Do not act on it until the user confirms you have reached a shared understanding."', 24, { font: "mono" }),
+        ]),
+        text(id, 64, 710, 1472, 100, [
+          para("grill-me hands over to grilling, so one skill can load another.", 28, { font: "mono", color: "accent" }),
+          para("grill-me ส่งต่อให้ grilling ทำงาน สกิลหนึ่งเรียกอีกสกิลได้", 24, { color: "text-2" }),
+        ]),
+      ], "Verify these two files against the repository before presenting. Point out how short they are."),
+    },
+    {
+      title: "Live Demo",
+      doc: doc([
+        ...chrome(id, "skills"),
+        ...heading(id, "switch to Claude Code", "Live Demo"),
+        card(id, 64, 260, 1472, 140, "accent", 1),
+        text(id, 100, 276, 1400, 110, [
+          para("01  The task", 32, { font: "mono", bold: true, color: "accent" }),
+          para("Plan a 30-person workshop for next Thursday.", 28),
+          para("วางแผนเวิร์กชอป 30 คนสำหรับวันพฤหัสบดีหน้า", 20, { color: "text-2" }),
+        ], { step: 1 }),
+        card(id, 64, 420, 1472, 140, "danger", 2),
+        text(id, 100, 436, 1400, 110, [
+          para("02  Round 1 · no skill", 32, { font: "mono", bold: true, color: "danger" }),
+          para("Just ask Claude for the plan.", 28),
+          para("ขอแผนจาก Claude ตรง ๆ โดยไม่ใช้สกิล", 20, { color: "text-2" }),
+        ], { step: 2 }),
+        card(id, 64, 580, 1472, 140, "success", 3),
+        text(id, 100, 596, 1400, 110, [
+          para("03  Round 2 · with the skill", 32, { font: "mono", bold: true, color: "success" }),
+          para("Type /grill-me, then give the same task.", 28),
+          para("พิมพ์ /grill-me แล้วให้โจทย์เดิม", 20, { color: "text-2" }),
+        ], { step: 3 }),
+        text(id, 64, 750, 1472, 60, [para("What did round 2 ask that round 1 never did?", 32, { font: "mono", color: "accent" })]),
+      ], "Run both rounds in your own Claude Code. Install grill-me AND grilling first, and rehearse once. Keep a screenshot as backup."),
+    },
+    {
+      title: "Safety: Read Before You Run",
+      doc: doc([
+        ...chrome(id, "skills"),
+        ...heading(id, "a skill is someone else's instructions", "Safety: Read Before You Run"),
+        ...[
+          ["01  What does it tell Claude to do?", "มันสั่งให้ Claude ทำอะไร?"],
+          ["02  Does it run scripts or commands?", "มีสคริปต์หรือคำสั่งให้รันไหม?"],
+          ["03  Does it touch files or the network?", "แตะไฟล์หรืออินเทอร์เน็ตไหม?"],
+          ["04  Who made it, and do you trust them?", "ใครเป็นคนทำ และเชื่อใจได้ไหม?"],
+        ].flatMap(([en, th], index): SlideElement[] => {
+          const x = index % 2 === 0 ? 64 : 812;
+          const y = index < 2 ? 260 : 510;
+          return [
+            card(id, x, y, 724, 230, "accent", index + 1),
+            text(id, x + 32, y + 24, 660, 190, [para(en, 32, { font: "mono", bold: true }), para(th, 24, { color: "text-2" })], { step: index + 1, valign: "middle" }),
+          ];
+        }),
+        text(id, 64, 760, 1472, 60, [para("Note: grill-me calls grilling, so read both files.", 28, { font: "mono", color: "danger" })]),
+      ], "Even official skills can include scripts. Read SKILL.md first, and read any skill it calls."),
+    },
+    {
+      title: "Where to Find More",
+      doc: doc([
+        ...chrome(id, "skills"),
+        ...heading(id, "take-home", "Where to Find More"),
+        card(id, 64, 260, 716, 250, "accent"),
+        text(id, 96, 284, 652, 210, [
+          para("Matt Pocock's skills", 32, { font: "mono", bold: true, color: "accent" }),
+          para("github.com/mattpocock/skills", 28, { font: "mono" }),
+        ]),
+        card(id, 820, 260, 716, 250, "success"),
+        text(id, 852, 284, 652, 210, [
+          para("Anthropic's official skills", 32, { font: "mono", bold: true, color: "success" }),
+          para("github.com/anthropics/skills", 28, { font: "mono" }),
+        ]),
+        { id: id(), type: "window", title: "in Claude Code", x: 64, y: 550, w: 1472, h: 240 },
+        text(id, 100, 620, 1400, 150, [
+          para("/plugin marketplace add anthropics/skills", 32, { font: "mono", color: "success" }),
+          para("เพิ่มคลังสกิลทางการของ Anthropic ใน Claude Code", 24, { color: "text-2" }),
+        ]),
+      ], "Take-home slide. Remind everyone to read SKILL.md before installing anything."),
+    },
   ];
 }

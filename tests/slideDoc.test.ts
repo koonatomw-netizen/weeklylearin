@@ -19,7 +19,7 @@ describe("validateSlideDoc", () => {
       if (result.ok) expect(result.doc).toEqual(doc);
     }
     const seed = week01Lesson(makeId);
-    expect(seed).toHaveLength(7);
+    expect(seed).toHaveLength(13);
     for (const slide of seed) expect(validateSlideDoc(slide.doc).ok, slide.title).toBe(true);
   });
 

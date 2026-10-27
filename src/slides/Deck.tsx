@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Crown, Trophy, Users, X } from "lucide-react";
-import { FIVE_PARTS } from "../shared/challenge";
+import { BUILT_IN_SLIDE_COUNT, FIVE_PARTS, LEGACY_SKILL_SLIDES, TOTAL_SLIDES } from "../shared/challenge";
 import type { BattleView, ChecklistKey, Language, SessionState } from "../shared/types";
+import { SlideRenderer } from "./SlideRenderer";
 import { BrandMark, Cmd, Cursor, QRStamp, TerminalWindow, WindowDots, formatCode, t } from "../ui";
 
 export type BattleCommand = "open_voting" | "close_voting" | "reveal" | "next_battle" | "start_final" | "start_tiebreak" | "accept_shared" | "show_results" | "start_feedback";
@@ -38,6 +39,8 @@ export function SlideStage({ children, className = "" }: { children: ReactNode; 
 }
 
 export function Slide(props: SlideProps) {
+  const skills = LEGACY_SKILL_SLIDES[props.index - BUILT_IN_SLIDE_COUNT];
+  if (skills) return <div className="slide" key={props.index}><SlideRenderer doc={skills.doc} step={props.step} /></div>;
   const slides = [WelcomeSlide, FormulaSlide, CompareSlide, AnatomySlide, ChallengeSlide, BattleSlide, ResultsSlide];
   const Current = slides[props.index] ?? WelcomeSlide;
   return <div className="slide" key={props.index}><Current {...props} /></div>;
@@ -48,7 +51,7 @@ function SlideFrame({ kicker, number, children, language }: { kicker: string; nu
     <header className="slide-top">
       <span className="slide-brand"><BrandMark size={30} /><b>4Seas</b><em>live training</em></span>
       <span className="slide-kicker">{kicker}</span>
-      <span className="slide-number">{String(number).padStart(2, "0")}<small>/07</small></span>
+      <span className="slide-number">{String(number).padStart(2, "0")}<small>/{String(TOTAL_SLIDES).padStart(2, "0")}</small></span>
     </header>
     <div className="slide-content">{children}</div>
     <footer className="slide-foot"><span>4Seas Nimman · Chiang Mai</span><span>{t(language, "Week 01 · Prompt Engineering", "สัปดาห์ที่ 1 · Prompt Engineering")}</span></footer>
