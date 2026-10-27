@@ -8,14 +8,9 @@ export function t(language: Language, english: string, thai: string): string {
   return language === "th" ? thai : english;
 }
 
-/** Original 4Seas mark: four stacked "sea" waves inside a rounded tile. */
+/** The 4Seas logo (public/logo.jpg) as a rounded tile. */
 export function BrandMark({ size = 28 }: { size?: number }) {
-  return <svg className="brand-mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-    <rect x="1" y="1" width="30" height="30" rx="8" fill="var(--accent)" />
-    {[9, 14, 19, 24].map((y, index) => (
-      <path key={y} d={`M7 ${y} q3 -3 6 0 t6 0 t6 0`} fill="none" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" opacity={1 - index * 0.18} />
-    ))}
-  </svg>;
+  return <img className="brand-mark" src="/logo.jpg" width={size} height={size} alt="" aria-hidden="true" />;
 }
 
 export function Brand({ compact = false }: { compact?: boolean }) {
