@@ -1,4 +1,5 @@
 import type { Challenge } from "./deck";
+import type { Rarity } from "./situations";
 
 export type { Challenge };
 export type Language = "en" | "th";
@@ -98,6 +99,9 @@ export interface LeaderboardRow {
 
 export type FinalStatus = "not_ready" | "ready" | "running" | "tie" | "complete";
 
+/** The case the presenter last opened. `roll` increases on every open so screens can tell a new draw from a reload. */
+export interface CaseRollInfo { situationId: string; roll: number; rarity: Rarity }
+
 export interface SessionState {
   code: string;
   title: string;
@@ -108,6 +112,8 @@ export interface SessionState {
   totalSlides: number;
   slideSteps: number[];
   challenge: Challenge;
+  /** Set once the presenter has opened a case; `challenge` is then that case's situation. */
+  caseRoll: CaseRollInfo | null;
   currentSlide: number;
   slideStep: number;
   participantCount: number;
@@ -177,4 +183,5 @@ export type ControlAction =
   | { action: "accept_shared" }
   | { action: "resolve"; battleId: string; winnerEntryIds: string[]; reason: string }
   | { action: "show_results" }
-  | { action: "start_feedback" };
+  | { action: "start_feedback" }
+  | { action: "open_case" };

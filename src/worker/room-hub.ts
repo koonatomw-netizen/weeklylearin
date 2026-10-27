@@ -1,12 +1,13 @@
 import { formGroups, shuffle, topEntryIds } from "../shared/battle";
 import { LEGACY_META, deckMeta, type DeckMeta, type PublishedDeck } from "../shared/deck";
 import type { WidgetKind } from "../shared/slideDoc";
+import { pickSituation } from "../shared/situations";
 import {
   FEEDBACK_TEXT_MAX, MAX_ATTEMPTS, MAX_PARTICIPANTS, PROMPT_MAX, PROMPT_MIN,
   type ChecklistKey, type ControlAction, type FeedbackResponse, type Role,
 } from "../shared/types";
 import {
-  buildEnvelope, entriesOf, eligibleVoters, finalSummary, orderedBattles, voteCounts,
+  buildEnvelope, caseBlockReason, entriesOf, eligibleVoters, finalSummary, orderedBattles, voteCounts,
   type ActionRow, type BattleRow, type EntryRow, type FeedbackStatusRow, type FinalRow, type ParticipantRow, type RoomRow,
   type Snapshot, type SubmissionRow, type VoteRow,
 } from "./view";
@@ -158,7 +159,7 @@ export class RoomHub {
   }
 
   private async getRoom(): Promise<RoomRow | null> {
-    return this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id FROM rooms WHERE code = ?")
+    return this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll FROM rooms WHERE code = ?")
       .bind(this.code).first<RoomRow>();
   }
 
@@ -181,7 +182,7 @@ export class RoomHub {
   private async snapshot(includeActions = false): Promise<Snapshot> {
     const db = this.env.DB;
     const [room, participants, submissions, finals, battles, entries, votes, actions, feedback] = await db.batch([
-      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id FROM rooms WHERE code = ?").bind(this.code),
+      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll FROM rooms WHERE code = ?").bind(this.code),
       db.prepare("SELECT id, nickname, joined_at FROM participants WHERE room_code = ? ORDER BY joined_at, nickname").bind(this.code),
       db.prepare("SELECT id, participant_id, attempt, prompt_text, request_id, checklist_json, submitted_at FROM prompt_submissions WHERE room_code = ? ORDER BY submitted_at").bind(this.code),
       db.prepare("SELECT participant_id, submission_id, auto_selected FROM final_selections WHERE room_code = ?").bind(this.code),
@@ -399,6 +400,16 @@ export class RoomHub {
         const statements = [setRoom("activity = ?", body.activity), this.logAction(`activity:${body.activity}`)];
         if (body.activity === "writing") statements.push(setRoom(jumpTo("challenge")));
         await db.batch(statements);
+        return;
+      }
+      case "open_case": {
+        const blocked = caseBlockReason(s);
+        if (blocked) throw new HttpError(409, blocked);
+        const pick = pickSituation(secureRandom, room.case_situation_id ?? undefined);
+        await db.batch([
+          setRoom("case_situation_id = ?, case_roll = case_roll + 1", pick.id),
+          this.logAction("open_case", { situation: pick.id, rarity: pick.rarity }),
+        ]);
         return;
       }
       case "generate_battles": {

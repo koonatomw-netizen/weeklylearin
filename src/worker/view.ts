@@ -1,5 +1,6 @@
 import { battleScore, buildLeaderboard, rankByVotes } from "../shared/battle";
 import type { DeckMeta } from "../shared/deck";
+import { situationById } from "../shared/situations";
 import type {
   Activity, BattleRound, BattleStatus, BattleView, Checklist, FeedbackSummary, FinalStatus, HostState,
   ParticipantSelf, Role, RoomEnvelope, SessionState,
@@ -15,6 +16,9 @@ export interface RoomRow {
   activity: Activity;
   active_battle_id: string | null;
   snapshot_id: string | null;
+  /** Situation the presenter's case landed on (see shared/situations.ts); null until a case is opened. */
+  case_situation_id: string | null;
+  case_roll: number;
 }
 export interface ParticipantRow { id: string; nickname: string; joined_at: string }
 export interface SubmissionRow { id: string; participant_id: string; attempt: number; prompt_text: string; request_id: string; checklist_json: string; submitted_at: string }
@@ -40,7 +44,14 @@ export interface Snapshot {
   meta: DeckMeta;
 }
 
-export const entryLabel = (index: number) => String.fromCharCode(65 + (index % 26));
+/** Why a case cannot be (re)opened right now, or null when it can. Opening one replaces the challenge, so it must not strand written prompts. */
+export function caseBlockReason(s: Snapshot): string | null {
+  if (s.battles.length > 0) return "Battles have started, so a new case can no longer be opened.";
+  if (s.submissions.length > 0) return "Prompts have already been submitted, so a new case can no longer be opened.";
+  return null;
+}
+
+export const entryLabel =(index: number) => String.fromCharCode(65 + (index % 26));
 
 export function orderedBattles(battles: readonly BattleRow[]): BattleRow[] {
   return [...battles].sort((a, b) => (a.round === b.round ? a.sequence - b.sequence : a.round === "mini" ? -1 : 1));
@@ -169,6 +180,7 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
   const submittedIds = new Set(s.submissions.map((submission) => submission.participant_id));
   const total = Math.max(1, s.meta.steps.length);
   const slide = Math.min(Math.max(0, s.room.current_slide), total - 1);
+  const drawn = situationById(s.room.case_situation_id);
   const state: SessionState = {
     code: s.room.code,
     title: s.meta.title,
@@ -177,7 +189,8 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
     snapshotId: s.room.snapshot_id ?? null,
     totalSlides: total,
     slideSteps: s.meta.steps,
-    challenge: s.meta.challenge,
+    challenge: drawn?.challenge ?? s.meta.challenge,
+    caseRoll: drawn ? { situationId: drawn.id, roll: s.room.case_roll, rarity: drawn.rarity } : null,
     currentSlide: slide,
     slideStep: Math.min(Math.max(0, s.room.slide_step), s.meta.steps[slide] ?? 0),
     participantCount: s.participants.length,
