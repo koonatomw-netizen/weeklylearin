@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
-import { Moon, Sun } from "lucide-react";
+import { Ghost, Moon, Sun } from "lucide-react";
 import type { Language } from "./shared/types";
-import type { Theme } from "./theme";
+import { nextTheme, type Theme } from "./theme";
 
 export function t(language: Language, english: string, thai: string): string {
   return language === "th" ? thai : english;
@@ -45,10 +45,14 @@ export function Cmd({ children, user = "4seas", path = "~/training" }: { childre
   return <div className="cmd"><span className="cmd-user">{user}</span><span className="cmd-path">:{path}</span><span className="cmd-sigil">$</span> <span className="cmd-text">{children}</span></div>;
 }
 
+/** One button that cycles dark → light → Halloween; its icon and label name the theme it switches to. */
 export function ThemeToggle({ theme, onToggle, language }: { theme: Theme; onToggle: () => void; language: Language }) {
-  const label = theme === "dark" ? t(language, "Switch to light theme", "เปลี่ยนเป็นธีมสว่าง") : t(language, "Switch to dark theme", "เปลี่ยนเป็นธีมมืด");
+  const next = nextTheme(theme);
+  const label = next === "light" ? t(language, "Switch to light theme", "เปลี่ยนเป็นธีมสว่าง")
+    : next === "halloween" ? t(language, "Switch to Halloween theme", "เปลี่ยนเป็นธีมฮาโลวีน")
+      : t(language, "Switch to dark theme", "เปลี่ยนเป็นธีมมืด");
   return <button className="icon-button" onClick={onToggle} aria-label={label} title={label}>
-    {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+    {next === "light" ? <Sun size={16} /> : next === "halloween" ? <Ghost size={16} /> : <Moon size={16} />}
   </button>;
 }
 

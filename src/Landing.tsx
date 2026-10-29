@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, LockKeyhole, Smartphone } from "lucide-react";
 import { createRoom, getPresenterPlans, tokens, type PresenterPlan } from "./api";
+import { PixelIcon } from "./case/PixelIcon";
 import type { Language } from "./shared/types";
 import type { Theme } from "./theme";
 import { Brand, Cmd, Cursor, LanguageSwitch, Notice, TerminalWindow, ThemeToggle, t } from "./ui";
@@ -61,8 +62,15 @@ export default function Landing({ language, onLanguage, theme, onTheme, hostRead
         <Cmd>whoami</Cmd>
         <p className="mono-dim">{t(language, "4Seas team member, ready to level up", "ทีม 4Seas พร้อมพัฒนาฝีมือ")}</p>
         <Cmd>cat today.md</Cmd>
-        <h1 className="hero-title">{t(language, "Live Training", "อบรมสด")}<span className="accent">.</span></h1>
-        <p className="hero-sub">{t(language, "Weekly hands-on sessions for the 4Seas team: learn together on the big screen, join from your phone with a room code.", "เวิร์กช็อปสดรายสัปดาห์ของทีม 4Seas: เรียนรู้ร่วมกันบนจอใหญ่ และเข้าร่วมจากมือถือด้วยรหัสห้อง")}</p>
+        {theme === "halloween"
+          ? <>
+            <h1 className="hero-title hero-title--hw"><PixelIcon situationId="pumpkin" size={64} /><span>{t(language, "Trick or Prompt", "หลอกหรือพรอมป์")}<span className="accent">?</span></span></h1>
+            <p className="hero-sub">{t(language, "A spooky-season session for the 4Seas team: learn on the big screen, then join from your phone with the room code.", "เวิร์กช็อปรับฮาโลวีนของทีม 4Seas: เรียนรู้บนจอใหญ่ แล้วเข้าร่วมจากมือถือด้วยรหัสห้อง")}</p>
+          </>
+          : <>
+            <h1 className="hero-title">{t(language, "Live Training", "อบรมสด")}<span className="accent">.</span></h1>
+            <p className="hero-sub">{t(language, "Weekly hands-on sessions for the 4Seas team: learn together on the big screen, join from your phone with a room code.", "เวิร์กช็อปสดรายสัปดาห์ของทีม 4Seas: เรียนรู้ร่วมกันบนจอใหญ่ และเข้าร่วมจากมือถือด้วยรหัสห้อง")}</p>
+          </>}
         <ol className="hero-flow mono">
           {["join", "learn", "try", "vote", "feedback"].map((step, index) => <li key={step}><span>{index + 1}</span>{step}</li>)}
         </ol>

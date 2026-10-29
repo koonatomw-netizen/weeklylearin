@@ -1,7 +1,16 @@
 /** One colour per character; "." is transparent. Each icon is a 12x12 grid. */
 export const ICON_PALETTE: Record<string, string> = {
   k: "#111827", w: "#f9fafb", r: "#ef4444", b: "#3b82f6", g: "#22c55e", y: "#facc15",
-  o: "#f97316", p: "#ec4899", n: "#92400e", c: "#67e8f9", a: "#9ca3af",
+  o: "#f97316", p: "#ec4899", n: "#92400e", c: "#67e8f9", a: "#9ca3af", u: "#8b6bd6",
+};
+
+/** Halloween sprites (12x12, same palette). Kept apart from SITUATION_ICONS, which is one icon per case. */
+export const HALLOWEEN_ICONS: Record<string, readonly string[]> = {
+  pumpkin: ["....gg......", ".....gg.....", "..oooooooo..", ".oooooooooo.", "oookkookkooo", "oooooooooooo", "ookooooookoo", "ooookkkkkooo", ".oooooooooo.", "..oooooooo..", "............", "............"],
+  ghost: ["....wwww....", "...wwwwww...", "..wwwwwwww..", "..wwkwwkww..", "..wwkwwkww..", "..wwwwwwww..", "..wwwkkwww..", "..wwwwwwww..", "..wwwwwwww..", "..wwwwwwww..", "..ww.ww.ww..", "............"],
+  bat: ["............", "u..........u", "uuu..uu..uuu", "uuuuuuuuuuuu", "uuuuruuruuuu", ".uuuuuuuuuu.", "..uu.uu.uu..", "............", "............", "............", "............", "............"],
+  skull: ["............", "...wwwwww...", "..wwwwwwww..", ".wwwwwwwwww.", ".wwkkwwkkww.", ".wwkkwwkkww.", ".wwwwkkwwww.", "..wwwwwwww..", "...wkwkwkw..", "...wwwwwww..", "............", "............"],
+  candy: ["............", ".....yy.....", "....yyyy....", "...yyyyyy...", "...oooooo...", "..oooooooo..", "..wwwwwwww..", ".wwwwwwwwww.", ".wwwwwwwwww.", "............", "............", "............"],
 };
 
 export const SITUATION_ICONS: Record<string, readonly string[]> = {

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { getConfig, tokens } from "./api";
+import HalloweenDecor from "./HalloweenDecor";
 import JoinScreen from "./JoinScreen";
 import Landing from "./Landing";
 import ParticipantScreen from "./ParticipantScreen";
@@ -70,9 +71,14 @@ export default function App() {
   }
   if ((page.view === "participant" || page.view === "join") && code) {
     const participantToken = tokens.participant(code);
-    return participantToken
+    return <Decorated theme={theme}>{participantToken
       ? <ParticipantScreen code={code} token={participantToken} {...common} />
-      : <JoinScreen code={code} {...common} />;
+      : <JoinScreen code={code} {...common} />}</Decorated>;
   }
-  return <Landing {...common} hostReady={hostReady} />;
+  return <Decorated theme={theme}><Landing {...common} hostReady={hostReady} /></Decorated>;
+}
+
+/** Festive extras for the screens people see on their phones; presenter, projector and admin stay clean. */
+export function Decorated({ theme, children }: { theme: string; children: React.ReactNode }) {
+  return <>{theme === "halloween" && <HalloweenDecor />}{children}</>;
 }
