@@ -1,4 +1,5 @@
 import { formGroups, shuffle, topEntryIds } from "../shared/battle";
+import { GAME_LIMITS } from "../shared/games";
 import { LEGACY_META, deckMeta, type DeckMeta, type PublishedDeck } from "../shared/deck";
 import type { WidgetKind } from "../shared/slideDoc";
 import { SITUATIONS, pickSituation } from "../shared/situations";
@@ -11,6 +12,7 @@ import {
   type ActionRow, type BattleRow, type EntryRow, type FeedbackStatusRow, type FinalRow, type ParticipantRow, type RoomRow,
   type Snapshot, type SubmissionRow, type VoteRow,
 } from "./view";
+import type { GameAnswerRow } from "../shared/games";
 
 export interface Env {
   DB: D1Database;
@@ -122,6 +124,7 @@ export class RoomHub {
       else if (pathname === "/checklist" && request.method === "POST") response = await this.saveChecklist(request, room);
       else if (pathname === "/final" && request.method === "POST") response = await this.selectFinal(request, room);
       else if (pathname === "/vote" && request.method === "POST") response = await this.vote(request, room);
+      else if (pathname === "/answer" && request.method === "POST") response = await this.answerGame(request, room);
       else if (pathname === "/control" && request.method === "POST") response = await this.control(request, room);
       else if (pathname === "/export" && request.method === "GET") response = await this.exportCsv(request, room);
       else if (pathname === "/feedback" && request.method === "POST") response = await this.submitFeedback(request, room);
@@ -164,9 +167,16 @@ export class RoomHub {
     finally { if (this.locks.get(key) === next) this.locks.delete(key); }
   }
 
+  /** The room row. D1 occasionally fails a read with a transient "session commit token" error, so it is retried a couple of times. */
   private async getRoom(): Promise<RoomRow | null> {
-    return this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll, ended_at FROM rooms WHERE code = ?")
-      .bind(this.code).first<RoomRow>();
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll, ended_at, game_id, game_question, game_status FROM rooms WHERE code = ?")
+          .bind(this.code).first<RoomRow>();
+      } catch (error) {
+        if (attempt >= 2 || !String(error).includes("session commit token")) throw error;
+      }
+    }
   }
 
   private async caller(request: Request, room: RoomRow): Promise<Caller | null> {
@@ -187,8 +197,8 @@ export class RoomHub {
 
   private async snapshot(includeActions = false): Promise<Snapshot> {
     const db = this.env.DB;
-    const [room, participants, submissions, finals, battles, entries, votes, actions, feedback] = await db.batch([
-      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll, ended_at FROM rooms WHERE code = ?").bind(this.code),
+    const [room, participants, submissions, finals, battles, entries, votes, actions, feedback, gameAnswers] = await db.batch([
+      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll, ended_at, game_id, game_question, game_status FROM rooms WHERE code = ?").bind(this.code),
       db.prepare("SELECT id, nickname, joined_at FROM participants WHERE room_code = ? ORDER BY joined_at, nickname").bind(this.code),
       db.prepare("SELECT id, participant_id, attempt, prompt_text, request_id, checklist_json, submitted_at FROM prompt_submissions WHERE room_code = ? ORDER BY submitted_at").bind(this.code),
       db.prepare("SELECT participant_id, submission_id, auto_selected FROM final_selections WHERE room_code = ?").bind(this.code),
@@ -199,6 +209,7 @@ export class RoomHub {
       db.prepare("SELECT action, detail_json, created_at FROM presenter_actions WHERE room_code = ? AND ? = 1 ORDER BY created_at DESC LIMIT 40").bind(this.code, includeActions ? 1 : 0),
       // Status columns only: free-text answers never enter the broadcast snapshot.
       db.prepare("SELECT participant_id, training_rating, submitted_at FROM weekly_feedback WHERE session_id = ?").bind(this.code),
+      db.prepare("SELECT participant_id, game_id, question_index, choice, text FROM game_answers WHERE room_code = ? ORDER BY created_at").bind(this.code),
     ]);
     const roomRow = (room.results as RoomRow[])[0];
     if (!roomRow) throw new HttpError(404, "Room not found.");
@@ -212,6 +223,7 @@ export class RoomHub {
       votes: votes.results as VoteRow[],
       actions: actions.results as ActionRow[],
       feedback: feedback.results as FeedbackStatusRow[],
+      gameAnswers: gameAnswers.results as GameAnswerRow[],
       meta: (await this.loadDeck(roomRow))?.meta ?? LEGACY_META,
     };
   }
@@ -367,6 +379,43 @@ export class RoomHub {
     });
   }
 
+  /** A participant's answer to the running game's current question. One answer per person per question. */
+  private async answerGame(request: Request, room: RoomRow): Promise<Response> {
+    const participant = await this.requireParticipant(request, room);
+    this.limit(`game:${participant.id}`, 60);
+    const body = await readBody<{ gameId: string; questionIndex: number; choice: number; text: string }>(request);
+    return this.withLock(`participant:${participant.id}`, async () => {
+      const current = await this.getRoom();
+      if (!current || current.activity !== "game" || !current.game_id || current.game_id !== String(body.gameId ?? "")) throw new HttpError(409, "This game is not running right now.");
+      if (current.game_status !== "open" || current.game_question !== Number(body.questionIndex)) throw new HttpError(409, "Answers are closed for this question.");
+      const game = (await this.loadDeck(current))?.meta.games.find((item) => item.id === current.game_id);
+      const question = game?.questions[current.game_question];
+      if (!game || !question) throw new HttpError(409, "This game is not running right now.");
+      let choice: number | null = null;
+      let text: string | null = null;
+      if (game.kind === "open") {
+        text = cleanText(body.text).replace(/\s+/g, " ");
+        if (!text || text.length > GAME_LIMITS.answer) throw new HttpError(400, `Type an answer of 1 to ${GAME_LIMITS.answer} characters.`);
+      } else {
+        choice = Number(body.choice);
+        if (!Number.isInteger(choice) || choice < 0 || choice >= question.options.length) throw new HttpError(400, "Choose one of the options.");
+      }
+      const existing = await this.env.DB.prepare("SELECT choice, text FROM game_answers WHERE participant_id = ? AND game_id = ? AND question_index = ?")
+        .bind(participant.id, game.id, current.game_question).first<{ choice: number | null; text: string | null }>();
+      if (existing) {
+        if (existing.choice === choice && existing.text === text) return this.envelopeFor({ role: "participant", participant });
+        throw new HttpError(409, "You have already answered this question.");
+      }
+      try {
+        await this.env.DB.prepare("INSERT INTO game_answers (id, room_code, participant_id, game_id, question_index, choice, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(crypto.randomUUID(), room.code, participant.id, game.id, current.game_question, choice, text, new Date().toISOString()).run();
+      } catch { throw new HttpError(409, "You have already answered this question."); }
+      await this.broadcast();
+      const response = await this.envelopeFor({ role: "participant", participant });
+      return new Response(response.body, { status: 201, headers: response.headers });
+    });
+  }
+
   // ------------------------------------------------------- presenter control
 
   private async control(request: Request, room: RoomRow): Promise<Response> {
@@ -404,6 +453,45 @@ export class RoomHub {
     switch (body.action) {
       case "end_room": {
         await db.batch([setRoom("ended_at = ?", now), this.logAction("end_room", { participants: s.participants.length, activity: room.activity })]);
+        return;
+      }
+      case "game_start": {
+        const game = s.meta.games.find((item) => item.id === body.gameId);
+        if (!game) throw new HttpError(404, "That game was not found in this session.");
+        if (room.activity === "writing" || room.activity === "battle" || room.activity === "feedback") throw new HttpError(409, "Close the current activity before starting a game.");
+        await db.batch([
+          db.prepare("DELETE FROM game_answers WHERE room_code = ? AND game_id = ?").bind(this.code, game.id),
+          setRoom("activity = 'game', game_id = ?, game_question = 0, game_status = 'open'", game.id),
+          this.logAction("game_start", { game: game.id, kind: game.kind }),
+        ]);
+        return;
+      }
+      case "game_close":
+      case "game_reveal":
+      case "game_next":
+      case "game_stop": {
+        const game = room.activity === "game" ? s.meta.games.find((item) => item.id === room.game_id) : undefined;
+        if (!game) throw new HttpError(409, "No game is running.");
+        const index = room.game_question;
+        const status = room.game_status;
+        if (body.action === "game_stop") {
+          await db.batch([setRoom("activity = 'waiting', game_id = NULL, game_question = 0, game_status = 'idle'"), this.logAction("game_stop", { game: game.id })]);
+          return;
+        }
+        if (body.action === "game_close") {
+          if (status !== "open") throw new HttpError(409, "Answers are already closed.");
+          await db.batch([setRoom("game_status = 'closed'"), this.logAction("game_close", { game: game.id, question: index })]);
+          return;
+        }
+        if (body.action === "game_reveal") {
+          if (status !== "closed") throw new HttpError(409, status === "open" ? "Close the answers before revealing." : "Already revealed.");
+          await db.batch([setRoom("game_status = 'revealed'"), this.logAction("game_reveal", { game: game.id, question: index })]);
+          return;
+        }
+        if (status === "open") throw new HttpError(409, "Close the answers before moving on.");
+        if (game.kind === "quiz" && status !== "revealed") throw new HttpError(409, "Reveal the answer before moving on.");
+        if (index + 1 >= game.questions.length) throw new HttpError(409, "That was the last question. Stop the game to go back to the slides.");
+        await db.batch([setRoom("game_question = ?, game_status = 'open'", index + 1), this.logAction("game_next", { game: game.id, question: index + 1 })]);
         return;
       }
       case "slide": {

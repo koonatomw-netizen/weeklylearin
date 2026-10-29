@@ -258,6 +258,93 @@ const w1State = (await request(`/api/rooms/${w1Room.roomCode}/state`, { token: w
 check(w1State.totalSlides === 13 && w1State.casePool === null, 'A Week 01 room presents 13 slides and uses the built-in case pool.');
 log('Week 01 session: plan, publish, presenter list, live room');
 
+// ------------------------------------------------------------- Game Hub
+const gamePlan = (await request('/api/admin/plans', { method: 'POST', token: admin, data: { title: 'Game Hub smoke' }, expected: 201 })).plan;
+const opt = (en) => ({ en });
+const badQuiz = [{ kind: 'quiz', title: { en: 'Q' }, questions: [{ text: { en: 'x' }, options: [opt('a'), opt('b')] }] }];
+await request(`/api/admin/plans/${gamePlan.id}`, { method: 'PATCH', token: admin, data: { games: badQuiz }, expected: 400 });
+await request(`/api/admin/plans/${gamePlan.id}`, { method: 'PATCH', token: admin, data: { games: [{ kind: 'poll', title: { en: 'P' }, questions: [{ text: { en: 'x' }, options: [opt('a')] }] }] }, expected: 400 });
+const games = [
+  { kind: 'poll', title: { en: 'Pick one' }, questions: [{ text: { en: 'Coffee or tea?' }, options: [opt('Coffee'), opt('Tea')] }, { text: { en: 'Day or night?' }, options: [opt('Day'), opt('Night')] }] },
+  { kind: 'quiz', title: { en: 'Quick quiz' }, questions: [{ text: { en: 'Two plus two?' }, options: [opt('3'), opt('4')], correct: 1 }, { text: { en: 'Capital of Thailand?' }, options: [opt('Bangkok'), opt('Phuket')], correct: 0 }] },
+  { kind: 'open', title: { en: 'Word wall' }, questions: [{ text: { en: 'One word for today' }, options: [] }] },
+];
+const savedGames = (await request(`/api/admin/plans/${gamePlan.id}`, { method: 'PATCH', token: admin, data: { slideIds: [opening.id], games } })).plan;
+check(savedGames.games.map((g) => g.id).join() === 'game-1,game-2,game-3' && savedGames.games[0].questions[0].options[0].th === 'Coffee', 'A plan stores its games, numbers them and falls back to English for Thai.');
+const gamePub = await request(`/api/admin/plans/${gamePlan.id}/publish`, { method: 'POST', token: admin, expected: 201 });
+const gameRoom = await request(`/api/admin/snapshots/${gamePub.snapshot.id}/session`, { method: 'POST', token: admin, expected: 201 });
+const groot = `/api/rooms/${gameRoom.roomCode}`;
+const gh = gameRoom.hostToken;
+const gctl = (action, expected = 200) => request(`${groot}/control`, { method: 'POST', token: gh, data: action, expected });
+const gstate = async (token) => (await request(`${groot}/state`, { token })).state;
+const gpeople = {};
+for (const name of ['Ann', 'Bo', 'Cy']) gpeople[name] = (await request(`${groot}/join`, { method: 'POST', data: { nickname: name }, expected: 201 })).participantToken;
+const answerAs = (name, body, expected = [200, 201]) => request(`${groot}/answer`, { method: 'POST', token: gpeople[name], data: body, expected });
+check((await gstate(gh)).games.length === 3 && (await gstate(gh)).game === null, 'The host sees the three games and none is running.');
+await answerAs('Ann', { gameId: 'game-1', questionIndex: 0, choice: 0 }, 409);
+await gctl({ action: 'game_start', gameId: 'nope' }, 404);
+await request(`${groot}/control`, { method: 'POST', token: gpeople.Ann, data: { action: 'game_start', gameId: 'game-1' }, expected: 401 });
+
+// Poll: live counts, one answer each, closing stops answers
+await gctl({ action: 'game_start', gameId: 'game-1' });
+let g = (await gstate(gh)).game;
+check(g.kind === 'poll' && g.status === 'open' && g.questionIndex === 0 && g.counts.join() === '0,0', 'Starting a poll opens question 1 with empty live counts.');
+await answerAs('Ann', { gameId: 'game-1', questionIndex: 0, choice: 0 });
+await answerAs('Bo', { gameId: 'game-1', questionIndex: 0, choice: 1 });
+await answerAs('Ann', { gameId: 'game-1', questionIndex: 0, choice: 0 }, 200);
+await answerAs('Ann', { gameId: 'game-1', questionIndex: 0, choice: 1 }, 409);
+await answerAs('Cy', { gameId: 'game-1', questionIndex: 0, choice: 7 }, 400);
+await answerAs('Cy', { gameId: 'game-1', questionIndex: 1, choice: 0 }, 409);
+await request(`${groot}/answer`, { method: 'POST', token: gh, data: { gameId: 'game-1', questionIndex: 0, choice: 0 }, expected: 401 });
+g = (await gstate(gh)).game;
+check(g.counts.join() === '1,1' && g.answered === 2 && g.eligible === 3, 'A poll shows live counts and who has answered; double answers and bad choices are refused.');
+check((await request(`${groot}/state`, { token: gpeople.Ann })).me.game.choice === 0, 'A participant sees their own answer.');
+await gctl({ action: 'game_next' }, 409);
+await gctl({ action: 'game_close' });
+await answerAs('Cy', { gameId: 'game-1', questionIndex: 0, choice: 0 }, 409);
+await gctl({ action: 'game_close' }, 409);
+await gctl({ action: 'game_reveal' });
+await gctl({ action: 'game_next' });
+check((await gstate(gh)).game.questionIndex === 1 && (await gstate(gh)).game.status === 'open', 'Next question opens question 2.');
+await gctl({ action: 'game_close' });
+await gctl({ action: 'game_next' }, 409);
+
+// Quiz: nothing leaks before the reveal; points and per-game leaders after
+await gctl({ action: 'game_start', gameId: 'game-2' });
+await answerAs('Ann', { gameId: 'game-2', questionIndex: 0, choice: 1 });
+await answerAs('Bo', { gameId: 'game-2', questionIndex: 0, choice: 0 });
+await gctl({ action: 'game_close' });
+g = (await gstate(gpeople.Ann)).game;
+check(g.counts === null && g.correct === null && g.top === null, 'A quiz hides counts and the right answer until the reveal.');
+await gctl({ action: 'game_next' }, 409);
+await gctl({ action: 'game_reveal' });
+g = (await gstate(gh)).game;
+check(g.correct === 1 && g.counts.join() === '1,1' && g.top.length === 1 && g.top[0].nickname === 'Ann' && g.top[0].points === 100, 'Revealing shows the right answer, the split and the leaders.');
+const annSelf = (await request(`${groot}/state`, { token: gpeople.Ann })).me.game;
+const boSelf = (await request(`${groot}/state`, { token: gpeople.Bo })).me.game;
+check(annSelf.correct === true && annSelf.points === 100 && boSelf.correct === false && boSelf.points === 0, 'Each player sees whether they were right and their points.');
+await gctl({ action: 'game_next' });
+await answerAs('Ann', { gameId: 'game-2', questionIndex: 1, choice: 0 });
+await gctl({ action: 'game_close' });
+await gctl({ action: 'game_reveal' });
+check((await gstate(gh)).game.top[0].points === 200, 'Points add up across the questions of one game.');
+
+// Open answers: anonymous wall
+await gctl({ action: 'game_start', gameId: 'game-3' });
+await answerAs('Ann', { gameId: 'game-3', questionIndex: 0, text: '  rota   panic ' });
+await answerAs('Bo', { gameId: 'game-3', questionIndex: 0, text: 'x'.repeat(141) }, 400);
+await answerAs('Bo', { gameId: 'game-3', questionIndex: 0, text: 'invoices' });
+g = (await gstate(gpeople.Cy)).game;
+check(g.texts.join('|') === 'invoices|rota panic' && !JSON.stringify(g).includes('Ann'), 'Open answers are cleaned, shown newest first and never carry names.');
+
+// Stopping, and the rules between games and other activities
+await gctl({ action: 'game_stop' });
+check((await gstate(gh)).activity === 'waiting' && (await gstate(gh)).game === null, 'Stopping a game returns the room to the waiting screen.');
+await gctl({ action: 'game_stop' }, 409);
+await gctl({ action: 'activity', activity: 'writing' });
+await gctl({ action: 'game_start', gameId: 'game-1' }, 409);
+log('Game Hub: validation, poll, quiz, open answers, anonymity, stop and activity rules');
+
 // ------------------------------------------------------- legacy rooms
 const legacy = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { builtIn: true }, expected: 201 });
 const legacyState = (await request(`/api/rooms/${legacy.roomCode}/state`, { token: legacy.hostToken })).state;

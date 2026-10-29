@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getDeck } from "../api";
+import { GameStage } from "../games/GameStage";
 import { CaseReelOverlay } from "../case/CaseReelOverlay";
 import type { PublishedDeck } from "../shared/deck";
 import type { Language, SessionState } from "../shared/types";
@@ -32,6 +33,8 @@ export function useDeck(code: string, token: string, snapshotId: string | null |
 /** The slide currently presented: a published JSON slide with live widgets, or the built-in Week 01 deck. */
 /** The slide currently presented, with the case-opening overlay on top so the projector and presenter stage both show it. */
 export function PresentedSlide(props: Parameters<typeof PresentedSlideBody>[0]) {
+  // While a Game Hub game runs, the big screen shows the game instead of the slide.
+  if (props.state.activity === "game" && props.state.game) return <GameStage state={props.state} language={props.language} />;
   return <>
     <PresentedSlideBody {...props} />
     <CaseReelOverlay state={props.state} language={props.language} />

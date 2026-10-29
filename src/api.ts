@@ -56,6 +56,9 @@ export const selectFinal = (code: string, token: string, submissionId: string) =
 export const castVote = (code: string, token: string, battleId: string, entryId: string, requestId: string) =>
   jsonRequest<RoomEnvelope>(room(code, "vote"), { method: "POST", headers: auth(token), body: JSON.stringify({ battleId, entryId, requestId }) });
 
+export const submitGameAnswer = (code: string, token: string, answer: { gameId: string; questionIndex: number; choice?: number; text?: string }) =>
+  jsonRequest<RoomEnvelope>(room(code, "answer"), { method: "POST", headers: auth(token), body: JSON.stringify(answer) });
+
 export const control = (code: string, token: string, action: ControlAction) =>
   jsonRequest<RoomEnvelope>(room(code, "control"), { method: "POST", headers: auth(token), body: JSON.stringify(action) });
 

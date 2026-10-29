@@ -1,5 +1,6 @@
 import { battleScore, buildLeaderboard, rankByVotes } from "../shared/battle";
 import { DEFAULT_FEEDBACK_QUESTIONS, type DeckMeta } from "../shared/deck";
+import { optionCounts, quizScores, summarizeGames, type GameAnswerRow, type GameSelf, type GameStatus, type GameView } from "../shared/games";
 import { situationById } from "../shared/situations";
 import type {
   Activity, BattleRound, BattleStatus, BattleView, Checklist, FeedbackSummary, FinalStatus, HostState,
@@ -19,6 +20,10 @@ export interface RoomRow {
   /** Situation the presenter's case landed on (see shared/situations.ts); null until a case is opened. */
   case_situation_id: string | null;
   case_roll: number;
+  /** The Game Hub game running now (when activity is "game"), its current question, and where that question stands. */
+  game_id: string | null;
+  game_question: number;
+  game_status: string;
   /** Set when the presenter ends the session for everyone; null while it is running. */
   ended_at: string | null;
 }
@@ -42,6 +47,7 @@ export interface Snapshot {
   votes: VoteRow[];
   actions: ActionRow[];
   feedback: FeedbackStatusRow[];
+  gameAnswers: GameAnswerRow[];
   /** Navigation info for the deck this room presents (built-in or published snapshot). */
   meta: DeckMeta;
 }
@@ -95,6 +101,48 @@ function parseChecklist(value: string): Checklist {
     const parsed = JSON.parse(value) as Checklist;
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch { return {}; }
+}
+
+/** The running game as the room sees it. Counts, right answers and leaders appear only when the game's rules allow. */
+export function buildGame(s: Snapshot): GameView | null {
+  const id = s.room.game_id;
+  if (s.room.activity !== "game" || !id) return null;
+  const game = s.meta.games.find((item) => item.id === id);
+  const index = s.room.game_question;
+  const question = game?.questions[index];
+  if (!game || !question) return null;
+  const status: GameStatus = s.room.game_status === "closed" ? "closed" : s.room.game_status === "revealed" ? "revealed" : "open";
+  const revealed = status === "revealed";
+  const here = s.gameAnswers.filter((answer) => answer.game_id === id && answer.question_index === index);
+  const names = new Map(s.participants.map((participant) => [participant.id, participant.nickname]));
+  const top = game.kind === "quiz" && revealed
+    ? [...quizScores(game, s.gameAnswers, index)].map(([participantId, points]) => ({ nickname: names.get(participantId) ?? "—", points }))
+      .sort((a, b) => b.points - a.points || a.nickname.localeCompare(b.nickname)).slice(0, 5)
+    : null;
+  return {
+    id, kind: game.kind, title: game.title, questionIndex: index, totalQuestions: game.questions.length, status,
+    question: { text: question.text, options: question.options },
+    answered: here.length, eligible: s.participants.length,
+    counts: game.kind === "poll" || (game.kind === "quiz" && revealed) ? optionCounts(question, s.gameAnswers, id, index) : null,
+    correct: game.kind === "quiz" && revealed ? question.correct ?? null : null,
+    texts: game.kind === "open" ? here.flatMap((answer) => (answer.text ? [answer.text] : [])).reverse().slice(0, 80) : null,
+    top,
+    isLast: index >= game.questions.length - 1,
+  };
+}
+
+function gameSelf(s: Snapshot, participantId: string): GameSelf | null {
+  const view = buildGame(s);
+  if (!view) return null;
+  const game = s.meta.games.find((item) => item.id === view.id)!;
+  const mine = s.gameAnswers.find((answer) => answer.participant_id === participantId && answer.game_id === view.id && answer.question_index === view.questionIndex);
+  const through = view.status === "revealed" ? view.questionIndex : view.questionIndex - 1;
+  return {
+    choice: mine?.choice ?? null,
+    text: mine?.text ?? null,
+    correct: game.kind === "quiz" && view.status === "revealed" && mine ? game.questions[view.questionIndex].correct === mine.choice : null,
+    points: quizScores(game, s.gameAnswers, through).get(participantId) ?? 0,
+  };
 }
 
 export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): RoomEnvelope {
@@ -194,6 +242,7 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
     totalSlides: total,
     slideSteps: s.meta.steps,
     challenge: drawn?.challenge ?? s.meta.challenge,
+    game: buildGame(s),
     casePool: s.meta.situations ? s.meta.situations.map((item) => ({ id: item.id, rarity: item.rarity, titleEn: item.challenge.titleEn, titleTh: item.challenge.titleTh })) : null,
     feedbackQuestions: s.meta.feedbackQuestions ?? DEFAULT_FEEDBACK_QUESTIONS,
     caseRoll: drawn ? { situationId: drawn.id, roll: s.room.case_roll, rarity: drawn.rarity } : null,
@@ -215,6 +264,7 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
     const finalIds = new Set(s.finals.map((final) => final.submission_id));
     const hostState: HostState = {
       ...state,
+      games: summarizeGames(s.meta.games),
       participants: s.participants.map((participant) => ({
         id: participant.id,
         nickname: participant.nickname,
@@ -254,6 +304,7 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
     finalSubmissionId: s.finals.find((final) => final.participant_id === me.id)?.submission_id ?? null,
     finalLocked: s.battles.length > 0,
     feedbackSubmittedAt: s.feedback.find((row) => row.participant_id === me.id)?.submitted_at ?? null,
+    game: gameSelf(s, me.id),
   } : undefined;
   return { role, state, me: self };
 }

@@ -72,7 +72,7 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
 const ROOM_ACTIONS: Record<string, string> = {
   join: "POST", state: "GET", ticket: "POST", ws: "GET", submit: "POST",
   checklist: "POST", final: "POST", vote: "POST", control: "POST", export: "GET",
-  feedback: "POST", responses: "GET", feedbackcsv: "GET", deck: "GET",
+  feedback: "POST", responses: "GET", feedbackcsv: "GET", deck: "GET", answer: "POST",
 };
 
 async function fetchHandler(request: Request, env: Env): Promise<Response> {

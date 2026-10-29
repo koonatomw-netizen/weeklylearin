@@ -1,4 +1,5 @@
 import type { Challenge, FeedbackQuestions } from "./deck";
+import type { GameSelf, GameSummary, GameView } from "./games";
 import type { Rarity } from "./situations";
 
 export type { Challenge, FeedbackQuestions };
@@ -6,7 +7,7 @@ export type Language = "en" | "th";
 export type Role = "host" | "participant";
 
 /** What participants are currently asked to do. Slides are independent of this. */
-export type Activity = "waiting" | "writing" | "writing_closed" | "battle" | "results" | "feedback";
+export type Activity = "waiting" | "writing" | "writing_closed" | "battle" | "results" | "feedback" | "game";
 export type BattleRound = "mini" | "final";
 export type BattleStatus = "pending" | "open" | "closed" | "revealed";
 export type ChecklistKey = "context" | "goal" | "audience" | "constraints" | "format";
@@ -121,6 +122,8 @@ export interface SessionState {
   caseRoll: CaseRollInfo | null;
   /** The plan's own case pool (titles only); null = the built-in pool; [] = case opening is off. */
   casePool: CasePoolTile[] | null;
+  /** The Game Hub game running right now, or null. */
+  game: GameView | null;
   /** Wording of the feedback questions for this session. */
   feedbackQuestions: FeedbackQuestions;
   currentSlide: number;
@@ -158,6 +161,8 @@ export interface HostSubmission {
 export interface PresenterActionView { action: string; detail: string; createdAt: string }
 
 export interface HostState extends SessionState {
+  /** Every Game Hub game this session can run. */
+  games: GameSummary[];
   participants: HostParticipant[];
   submissions: HostSubmission[];
   actions: PresenterActionView[];
@@ -171,6 +176,8 @@ export interface ParticipantSelf {
   finalSubmissionId: string | null;
   finalLocked: boolean;
   feedbackSubmittedAt: string | null;
+  /** My answer to the current game question, or null when no game is running. */
+  game: GameSelf | null;
 }
 
 export interface RoomEnvelope {
@@ -194,4 +201,9 @@ export type ControlAction =
   | { action: "show_results" }
   | { action: "start_feedback" }
   | { action: "open_case" }
-  | { action: "end_room" };
+  | { action: "end_room" }
+  | { action: "game_start"; gameId: string }
+  | { action: "game_close" }
+  | { action: "game_reveal" }
+  | { action: "game_next" }
+  | { action: "game_stop" };

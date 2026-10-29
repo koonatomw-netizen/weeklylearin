@@ -227,6 +227,7 @@ function AnatomySlide({ step, language }: SlideProps) {
 
 export const activityLabel = (state: SessionState, language: Language) => ({
   waiting: t(language, "Waiting to start", "รอเริ่มกิจกรรม"),
+  game: t(language, "Game in progress", "กำลังเล่นเกม"),
   writing: t(language, "Submissions open", "เปิดรับพรอมป์"),
   writing_closed: t(language, "Submissions closed", "ปิดรับพรอมป์แล้ว"),
   battle: t(language, "Prompt Battle", "Prompt Battle"),

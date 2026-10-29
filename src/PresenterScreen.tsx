@@ -4,6 +4,7 @@ import {
   Monitor, Play, Plus, Shuffle, Square, Users,
 } from "lucide-react";
 import { control, exportResults, getFeedbackResponses } from "./api";
+import { GameHub } from "./games/GameHub";
 import { groupSizes } from "./shared/battle";
 import { BUILT_IN_SLIDE_COUNT, SLIDE_TITLES } from "./shared/challenge";
 import { PresentedSlide, useDeck } from "./slides/PresentedSlide";
@@ -14,7 +15,7 @@ import type { Theme } from "./theme";
 import { useRoom } from "./useRoom";
 import { Brand, LanguageSwitch, LiveDot, Notice, QRStamp, TerminalWindow, ThemeToggle, formatCode, t } from "./ui";
 
-type Mode = "slides" | "waiting" | "writing" | "battle" | "results" | "feedback";
+type Mode = "slides" | "waiting" | "games" | "battle" | "results" | "feedback";
 
 export function joinUrlFor(code: string): string {
   let origin = window.location.origin;
@@ -111,7 +112,7 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
   const modes: Array<{ id: Mode; en: string; th: string }> = [
     { id: "slides", en: "Slides", th: "สไลด์" },
     { id: "waiting", en: "Waiting Room", th: "ห้องรอ" },
-    { id: "writing", en: "Prompt Writing", th: "เขียนพรอมป์" },
+    { id: "games", en: "Game Hub", th: "ศูนย์รวมเกม" },
     { id: "battle", en: "Battle Control", th: "ควบคุมแบทเทิล" },
     { id: "results", en: "Results", th: "ผลลัพธ์" },
     { id: "feedback", en: "Feedback", th: "แบบสอบถาม" },
@@ -219,7 +220,7 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
     </section>}
 
     {mode === "waiting" && <WaitingRoom state={state} code={code} joinUrl={joinUrl} onJoinUrl={setJoinUrl} language={language} navigate={navigate} />}
-    {mode === "writing" && <WritingControl state={state} language={language} busy={busy} send={send} />}
+    {mode === "games" && <GameHub state={state} language={language} busy={busy} send={send} battlePanel={<WritingControl state={state} language={language} busy={busy} send={send} />} />}
     {mode === "battle" && <BattleControl state={state} language={language} busy={busy} send={send} command={command} />}
     {mode === "results" && <ResultsPanel state={state} language={language} busy={busy} command={command} onExport={() => void downloadCsv()} onFeedback={() => { setMode("feedback"); void send({ action: "start_feedback" }); }} />}
     {mode === "feedback" && <FeedbackPanel state={state} code={code} token={token} language={language} busy={busy} onStart={() => void send({ action: "start_feedback" })} onExport={() => void downloadCsv("feedbackcsv")} />}
@@ -266,7 +267,7 @@ function WaitingRoom({ state, code, joinUrl, onJoinUrl, language, navigate }: { 
 function WritingControl({ state, language, busy, send }: { state: HostState; language: Language; busy: boolean; send: (action: ControlAction) => Promise<void> }) {
   const [showAll, setShowAll] = useState(false);
   const locked = state.battles.length > 0;
-  const status = { waiting: t(language, "not started", "ยังไม่เริ่ม"), writing: t(language, "open", "เปิดอยู่"), writing_closed: t(language, "closed", "ปิดแล้ว"), battle: t(language, "locked — battles started", "ล็อกแล้ว — เริ่มแบทเทิล"), results: t(language, "locked", "ล็อกแล้ว"), feedback: t(language, "locked", "ล็อกแล้ว") }[state.activity];
+  const status = { waiting: t(language, "not started", "ยังไม่เริ่ม"), writing: t(language, "open", "เปิดอยู่"), writing_closed: t(language, "closed", "ปิดแล้ว"), battle: t(language, "locked — battles started", "ล็อกแล้ว — เริ่มแบทเทิล"), game: t(language, "game running", "กำลังเล่นเกม"), results: t(language, "locked", "ล็อกแล้ว"), feedback: t(language, "locked", "ล็อกแล้ว") }[state.activity];
   const submissions = [...state.submissions].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   return <section className="panel-grid">
     <TerminalWindow title="challenge.md" right={<span className={`status-chip is-${state.activity === "writing" ? "open" : "pending"}`}><i />{status}</span>}>

@@ -1,4 +1,5 @@
 import { DEFAULT_CHALLENGE, validateChallenge, validateFeedbackQuestions, validateSituations, type Challenge, type PublishedDeck } from "../shared/deck";
+import { validateGames } from "../shared/games";
 import { stepCount, validateSlideDoc, type SlideDoc } from "../shared/slideDoc";
 import { HttpError, cleanBlock, cleanLine, json, readBody } from "./http";
 import { makeRoomCode, randomSecret, sha256, type Env } from "./room-hub";
@@ -14,7 +15,7 @@ type Audit = (action: string, detail?: Record<string, unknown>) => D1PreparedSta
 interface PlanRow {
   id: string; title: string; week_date: string | null; duration_min: number | null; notes: string; challenge_json: string;
   status: "draft" | "published"; copied_from: string | null; created_at: string; updated_at: string;
-  situations_json?: string | null; feedback_json?: string | null;
+  situations_json?: string | null; feedback_json?: string | null; games_json?: string | null;
   slide_count?: number; latest_version?: number | null; latest_snapshot_id?: string | null; published_at?: string | null; stale?: number;
 }
 
@@ -48,9 +49,11 @@ function parseStored<T>(value: string | null | undefined, validate: (input: unkn
 const parseSituations = (value: string | null | undefined) => parseStored(value, (input) => { const r = validateSituations(input); return r.ok ? r.situations : null; });
 const parseFeedback = (value: string | null | undefined) => parseStored(value, (input) => { const r = validateFeedbackQuestions(input); return r.ok ? r.questions : null; });
 
+const parseGames = (value: string | null | undefined) => parseStored(value, (input) => { const r = validateGames(input); return r.ok ? r.games : null; });
+
 const planView = (row: PlanRow) => ({
   id: row.id, title: row.title, weekDate: row.week_date, durationMin: row.duration_min, notes: row.notes,
-  challenge: parseChallenge(row.challenge_json), situations: parseSituations(row.situations_json), feedbackQuestions: parseFeedback(row.feedback_json), status: row.status, copiedFrom: row.copied_from,
+  challenge: parseChallenge(row.challenge_json), situations: parseSituations(row.situations_json), feedbackQuestions: parseFeedback(row.feedback_json), games: parseGames(row.games_json), status: row.status, copiedFrom: row.copied_from,
   createdAt: row.created_at, updatedAt: row.updated_at, slideCount: row.slide_count ?? 0,
   latestVersion: row.latest_version ?? null, latestSnapshotId: row.latest_snapshot_id ?? null, publishedAt: row.published_at ?? null, hasUnpublishedChanges: Boolean(row.stale),
 });
@@ -139,6 +142,7 @@ export async function publishPlan(env: Env, planId: string, audit: Audit) {
     notes: detail.notes, challenge: detail.challenge, slides,
     ...(detail.situations ? { situations: detail.situations } : {}),
     ...(detail.feedbackQuestions ? { feedbackQuestions: detail.feedbackQuestions } : {}),
+    ...(detail.games ? { games: detail.games } : {}),
   };
   const deckJson = JSON.stringify(deck);
   if (deckJson.length > MAX_DECK_BYTES) throw new HttpError(413, "This plan is too large to publish. Split it into two sessions.");
@@ -173,9 +177,9 @@ export async function handlePlans(path: string, method: string, request: Request
       const source = await db.prepare("SELECT * FROM training_plans WHERE id = ?").bind(body.copyFrom).first<PlanRow>();
       if (!source) throw new HttpError(404, "The plan to copy was not found.");
       await db.batch([
-        db.prepare(`INSERT INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, situations_json, feedback_json, status, copied_from, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`)
-          .bind(id, `${source.title} (copy)`.slice(0, 120), source.week_date ? addDays(source.week_date, 7) : null, source.duration_min, source.notes, source.challenge_json, source.situations_json ?? null, source.feedback_json ?? null, source.id, now, now),
+        db.prepare(`INSERT INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, situations_json, feedback_json, games_json, status, copied_from, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`)
+          .bind(id, `${source.title} (copy)`.slice(0, 120), source.week_date ? addDays(source.week_date, 7) : null, source.duration_min, source.notes, source.challenge_json, source.situations_json ?? null, source.feedback_json ?? null, source.games_json ?? null, source.id, now, now),
         db.prepare("INSERT INTO training_plan_slides (plan_id, slide_id, position) SELECT ?, slide_id, position FROM training_plan_slides WHERE plan_id = ?").bind(id, source.id),
         audit("plan.duplicate", { planId: id, from: source.id }),
       ]);
@@ -223,6 +227,12 @@ export async function handlePlans(path: string, method: string, request: Request
         if (!result.ok) throw new HttpError(400, result.error);
         feedbackJson = result.questions === null ? null : JSON.stringify(result.questions);
       }
+      let gamesJson = plan.games_json ?? null;
+      if (body.games !== undefined) {
+        const result = validateGames(body.games);
+        if (!result.ok) throw new HttpError(400, result.error);
+        gamesJson = result.games === null ? null : JSON.stringify(result.games);
+      }
       const statements: D1PreparedStatement[] = [];
       if (body.slideIds !== undefined) {
         if (!Array.isArray(body.slideIds) || body.slideIds.length > MAX_PLAN_SLIDES) throw new HttpError(400, `A plan can hold at most ${MAX_PLAN_SLIDES} slides.`);
@@ -236,8 +246,8 @@ export async function handlePlans(path: string, method: string, request: Request
         ids.forEach((slideId, position) => statements.push(db.prepare("INSERT INTO training_plan_slides (plan_id, slide_id, position) VALUES (?, ?, ?)").bind(planId, slideId, position)));
       }
       statements.push(
-        db.prepare("UPDATE training_plans SET title = ?, week_date = ?, duration_min = ?, notes = ?, challenge_json = ?, situations_json = ?, feedback_json = ?, updated_at = ? WHERE id = ?")
-          .bind(title, weekDate, duration, notes, challengeJson, situationsJson, feedbackJson, new Date().toISOString(), planId),
+        db.prepare("UPDATE training_plans SET title = ?, week_date = ?, duration_min = ?, notes = ?, challenge_json = ?, situations_json = ?, feedback_json = ?, games_json = ?, updated_at = ? WHERE id = ?")
+          .bind(title, weekDate, duration, notes, challengeJson, situationsJson, feedbackJson, gamesJson, new Date().toISOString(), planId),
         audit("plan.update", { planId, slides: body.slideIds !== undefined }),
       );
       await db.batch(statements);
