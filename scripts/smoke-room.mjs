@@ -264,6 +264,21 @@ try {
   check(csv.includes('battle_score') && csv.includes('joint winners'), 'CSV includes scores and resolution notes.');
   log('12. CSV export (formula-safe)');
 
+  // ------------------------------------------------------ 13. end session
+  await request(`${root}/control`, { method: 'POST', token: tokenOf('Bee'), data: { action: 'end_room' }, expected: 401 });
+  check((await request(`${root}/state`, { token: host })).state.endedAt === null, 'Room is running before it is ended.');
+  const ended = await ctl({ action: 'end_room' });
+  check(typeof ended.state.endedAt === 'string', 'end_room sets endedAt.');
+  const endedAgain = await ctl({ action: 'end_room' });
+  check(endedAgain.state.endedAt === ended.state.endedAt, 'Ending twice is a harmless no-op.');
+  check((await stateOf('Bee')).state.endedAt === ended.state.endedAt, 'Participants see the room as ended.');
+  await ctl({ action: 'activity', activity: 'waiting' }, 409);
+  await request(`${root}/join`, { method: 'POST', data: { nickname: 'Latecomer' }, expected: 409 });
+  await request(`${root}/submit`, { method: 'POST', token: tokenOf('Bee'), data: { prompt: 'x'.repeat(40), requestId: randomUUID() }, expected: 409 });
+  await request(`${root}/feedback`, { method: 'POST', token: tokenOf('Bee'), data: {}, expected: 409 });
+  check((await request(`${root}/export`, { token: host })).includes('battle_score'), 'Results stay exportable after the room ends.');
+  log('13. end session: presenter-only, idempotent, room read-only afterwards, results kept');
+
   check(frames.some((frame) => frame.state?.activity === 'battle') && frames.some((frame) => frame.state?.activity === 'results'), 'WebSocket pushed live state changes.');
   log(`   WebSocket delivered ${frames.length} live frames`);
   console.log(`\nPASS: ${checks} assertions. Synthetic fixtures remain in local D1 only.`);

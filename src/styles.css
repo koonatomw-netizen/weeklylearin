@@ -1050,3 +1050,5 @@ blockquote.prompt-text { margin: 0; padding: 10px 12px; border-left: 3px solid v
   .case-strip { transition: none !important; }
   .case-reveal { animation: case-fade 0.4s ease-out; }
 }
+
+.end-confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--danger); }

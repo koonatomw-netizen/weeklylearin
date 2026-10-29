@@ -31,6 +31,7 @@ export default function ParticipantScreen({ code, token, language, onLanguage, t
   if (!room || !room.me) return <main className="center-page"><Brand /><p className="mono-dim"><LoaderCircle className="spin" size={16} /> {error || t(language, "connecting to the room…", "กำลังเชื่อมต่อห้อง…")}</p></main>;
 
   const { state, me } = room;
+  if (state.endedAt) return <main className="center-page"><Brand /><Notice kind="info">{t(language, "This session has ended. Thank you for joining!", "เซสชันนี้จบแล้ว ขอบคุณที่เข้าร่วม!")}</Notice></main>;
   return <main className="participant">
     <header className="app-header app-header--compact">
       <Brand compact />

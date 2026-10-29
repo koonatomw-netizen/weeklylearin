@@ -16,7 +16,7 @@ export interface AdminPlanDetail extends AdminPlan {
   slides: AdminPlanSlide[];
   snapshots: Array<{ id: string; version: number; publishedAt: string; bytes: number }>;
 }
-export interface AdminSession { code: string; title: string; createdAt: string; activity: string; snapshotId: string | null; version: number | null; planId: string | null; participants: number; feedback: number }
+export interface AdminSession { code: string; title: string; createdAt: string; activity: string; endedAt: string | null; snapshotId: string | null; version: number | null; planId: string | null; participants: number; feedback: number }
 export interface FeedbackReportRow extends Omit<AdminSession, "snapshotId" | "feedback"> { responses: number; averageRating: number | null }
 export interface SessionTag { id: string; tag: string; note: string; createdAt: string }
 export interface RecurringIssue { tag: string; latestAt: string; sessions: Array<{ code: string; title: string; note: string }> }

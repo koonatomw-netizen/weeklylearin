@@ -107,6 +107,8 @@ export interface SessionState {
   title: string;
   createdAt: string;
   activity: Activity;
+  /** Set once the presenter ends the session for everyone; the room is then read-only. */
+  endedAt: string | null;
   /** Published deck this room presents; null = the built-in Week 01 deck. */
   snapshotId: string | null;
   totalSlides: number;
@@ -184,4 +186,5 @@ export type ControlAction =
   | { action: "resolve"; battleId: string; winnerEntryIds: string[]; reason: string }
   | { action: "show_results" }
   | { action: "start_feedback" }
-  | { action: "open_case" };
+  | { action: "open_case" }
+  | { action: "end_room" };

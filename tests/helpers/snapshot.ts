@@ -8,7 +8,7 @@ export function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     request_id: `req-${participant.id}`, checklist_json: "{}", submitted_at: "2026-01-01T00:01:00Z",
   }));
   return {
-    room: { code: "123456", title: "t", host_token_hash: "x", created_at: "2026", current_slide: 5, slide_step: 0, activity: "battle", active_battle_id: "b1", snapshot_id: null, case_situation_id: null, case_roll: 0 },
+    room: { code: "123456", title: "t", host_token_hash: "x", created_at: "2026", current_slide: 5, slide_step: 0, activity: "battle", active_battle_id: "b1", snapshot_id: null, case_situation_id: null, case_roll: 0, ended_at: null },
     meta: LEGACY_META,
     participants,
     submissions,

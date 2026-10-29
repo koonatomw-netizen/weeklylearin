@@ -19,6 +19,8 @@ export interface RoomRow {
   /** Situation the presenter's case landed on (see shared/situations.ts); null until a case is opened. */
   case_situation_id: string | null;
   case_roll: number;
+  /** Set when the presenter ends the session for everyone; null while it is running. */
+  ended_at: string | null;
 }
 export interface ParticipantRow { id: string; nickname: string; joined_at: string }
 export interface SubmissionRow { id: string; participant_id: string; attempt: number; prompt_text: string; request_id: string; checklist_json: string; submitted_at: string }
@@ -186,6 +188,7 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
     title: s.meta.title,
     createdAt: s.room.created_at,
     activity: s.room.activity,
+    endedAt: s.room.ended_at ?? null,
     snapshotId: s.room.snapshot_id ?? null,
     totalSlides: total,
     slideSteps: s.meta.steps,

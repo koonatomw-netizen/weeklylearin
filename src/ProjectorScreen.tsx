@@ -22,6 +22,8 @@ export default function ProjectorScreen({ code, token, language }: { code: strin
   if (expired) return <main className="center-page"><Brand /><Notice>{t(language, "Open the projector from the presenter console on this computer.", "เปิดหน้าจอโปรเจกเตอร์จากหน้าผู้สอนบนเครื่องนี้")}</Notice></main>;
   if (!room) return <main className="center-page"><Brand /><p className="mono-dim">{error || t(language, "connecting to live slides…", "กำลังเชื่อมต่อสไลด์…")}</p></main>;
 
+  if (room.state.endedAt) return <main className="center-page"><Brand /><Notice kind="info">{t(language, "This session has ended. Thank you!", "เซสชันนี้จบแล้ว ขอบคุณทุกคน!")}</Notice></main>;
+
   return <main><div className="projector" ref={fullscreen.ref}>
     <SlideStage className="stage--full">
       <PresentedSlide state={room.state} deck={deck} language={language} joinUrl={joinUrlFor(code)} />

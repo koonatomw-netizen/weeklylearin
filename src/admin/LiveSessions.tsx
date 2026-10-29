@@ -56,7 +56,7 @@ export default function LiveSessions({ language, navigate }: { language: Languag
             <td className="mono">{formatCode(session.code)}</td>
             <td>{session.title}{session.version ? <span className="mono-dim"> · v{session.version}</span> : <span className="mono-dim"> · built-in</span>}</td>
             <td className="mono-dim">{new Date(session.createdAt).toLocaleString()}</td>
-            <td className="mono-dim">{session.activity}</td>
+            <td className="mono-dim">{session.endedAt ? t(language, "ended", "สิ้นสุดแล้ว") : session.activity}</td>
             <td className="mono">{session.participants}</td>
             <td className="mono">{session.feedback}/{session.participants}</td>
             <td>{canOpen

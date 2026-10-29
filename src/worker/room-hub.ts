@@ -108,6 +108,10 @@ export class RoomHub {
       if (pathname === "/ws") return await this.connectSocket(request);
       const room = await this.getRoom();
       if (!room) return json({ error: "Room not found. Check the six-digit room code." }, 404);
+      // An ended room is read-only: state, deck and exports still work; everything that changes the room is refused.
+      if (room.ended_at && request.method === "POST" && pathname !== "/control" && pathname !== "/ticket") {
+        return json({ error: "This session has ended." }, 409);
+      }
       let response: Response;
       if (pathname === "/join" && request.method === "POST") response = await this.join(request, room);
       else if (pathname === "/state" && request.method === "GET") response = await this.getState(request, room);
@@ -159,7 +163,7 @@ export class RoomHub {
   }
 
   private async getRoom(): Promise<RoomRow | null> {
-    return this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll FROM rooms WHERE code = ?")
+    return this.env.DB.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll, ended_at FROM rooms WHERE code = ?")
       .bind(this.code).first<RoomRow>();
   }
 
@@ -182,7 +186,7 @@ export class RoomHub {
   private async snapshot(includeActions = false): Promise<Snapshot> {
     const db = this.env.DB;
     const [room, participants, submissions, finals, battles, entries, votes, actions, feedback] = await db.batch([
-      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll FROM rooms WHERE code = ?").bind(this.code),
+      db.prepare("SELECT code, title, host_token_hash, created_at, current_slide, slide_step, activity, active_battle_id, snapshot_id, case_situation_id, case_roll, ended_at FROM rooms WHERE code = ?").bind(this.code),
       db.prepare("SELECT id, nickname, joined_at FROM participants WHERE room_code = ? ORDER BY joined_at, nickname").bind(this.code),
       db.prepare("SELECT id, participant_id, attempt, prompt_text, request_id, checklist_json, submitted_at FROM prompt_submissions WHERE room_code = ? ORDER BY submitted_at").bind(this.code),
       db.prepare("SELECT participant_id, submission_id, auto_selected FROM final_selections WHERE room_code = ?").bind(this.code),
@@ -367,6 +371,11 @@ export class RoomHub {
     const caller = await this.caller(request, room);
     if (!caller || caller.role !== "host") return json({ error: "Presenter access is required." }, 401);
     const body = await readBody<ControlAction>(request) as ControlAction;
+    // Ending twice is harmless; anything else on an ended room is refused (re-checked under the lock).
+    if (room.ended_at) {
+      if (body.action !== "end_room") throw new HttpError(409, "This session has ended.");
+      return this.envelopeFor({ role: "host" });
+    }
     await this.withLock("control", () => this.applyControl(body));
     await this.broadcast();
     return this.envelopeFor({ role: "host" });
@@ -385,7 +394,16 @@ export class RoomHub {
       return Number.isInteger(index) ? `current_slide = ${Number(index)}, slide_step = 0` : "current_slide = current_slide";
     };
 
+    if (room.ended_at) {
+      if (body.action === "end_room") return;
+      throw new HttpError(409, "This session has ended.");
+    }
+
     switch (body.action) {
+      case "end_room": {
+        await db.batch([setRoom("ended_at = ?", now), this.logAction("end_room", { participants: s.participants.length, activity: room.activity })]);
+        return;
+      }
       case "slide": {
         const index = Number(body.index);
         const step = Number(body.step ?? 0);

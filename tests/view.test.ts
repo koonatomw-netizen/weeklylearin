@@ -86,6 +86,12 @@ describe("buildEnvelope case opening", () => {
     expect(state.caseRoll).toBeNull();
   });
 
+  it("reports endedAt only once the room has ended", () => {
+    expect(buildEnvelope(snapshot(), "host").state.endedAt).toBeNull();
+    const ended = snapshot({ room: { ...snapshot().room, ended_at: "2026-10-30T10:00:00Z" } });
+    expect(buildEnvelope(ended, "participant", "p1").state.endedAt).toBe("2026-10-30T10:00:00Z");
+  });
+
   it("serves the drawn situation as the challenge", () => {
     const s = snapshot({ room: { ...snapshot().room, case_situation_id: "wifi-panic", case_roll: 2 } });
     for (const envelope of [buildEnvelope(s, "host"), buildEnvelope(s, "participant", "p5")]) {

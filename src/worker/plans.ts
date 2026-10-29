@@ -225,14 +225,14 @@ export async function handlePlans(path: string, method: string, request: Request
   }
 
   if (path === "/sessions" && method === "GET") {
-    const rows = await db.prepare(`SELECT r.code, r.title, r.created_at, r.activity, r.snapshot_id, t.version, t.plan_id,
+    const rows = await db.prepare(`SELECT r.code, r.title, r.created_at, r.activity, r.ended_at, r.snapshot_id, t.version, t.plan_id,
         (SELECT COUNT(*) FROM participants p WHERE p.room_code = r.code) AS participants,
         (SELECT COUNT(*) FROM weekly_feedback f WHERE f.session_id = r.code) AS feedback
       FROM rooms r LEFT JOIN training_snapshots t ON t.id = r.snapshot_id ORDER BY r.created_at DESC LIMIT 40`)
-      .all<{ code: string; title: string; created_at: string; activity: string; snapshot_id: string | null; version: number | null; plan_id: string | null; participants: number; feedback: number }>();
+      .all<{ code: string; title: string; created_at: string; activity: string; ended_at: string | null; snapshot_id: string | null; version: number | null; plan_id: string | null; participants: number; feedback: number }>();
     return json({
       sessions: rows.results.map((row) => ({
-        code: row.code, title: row.title, createdAt: row.created_at, activity: row.activity, snapshotId: row.snapshot_id,
+        code: row.code, title: row.title, createdAt: row.created_at, activity: row.activity, endedAt: row.ended_at, snapshotId: row.snapshot_id,
         version: row.version, planId: row.plan_id, participants: row.participants, feedback: row.feedback,
       })),
     });

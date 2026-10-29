@@ -55,6 +55,7 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
   const [mode, setMode] = useState<Mode>("slides");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const [joinUrl, setJoinUrl] = useState(() => joinUrlFor(code));
   const sequence = useRef(0);
   const fullscreen = useFullscreen();
@@ -136,6 +137,18 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
     } catch (caught) { setToast(caught instanceof Error ? caught.message : "CSV export failed."); }
   }
 
+  if (state.endedAt) {
+    return <main className="center-page"><Brand />
+      <Notice kind="info">{t(language, "This session has ended for everyone. Results are saved and can be downloaded below.", "จบเซสชันสำหรับทุกคนแล้ว ผลลัพธ์ถูกบันทึกไว้และดาวน์โหลดได้ด้านล่าง")}</Notice>
+      {toast && <Notice>{toast}</Notice>}
+      <div className="slide-controls-right">
+        <button className="btn" onClick={() => void downloadCsv("export")}><Download size={16} />{t(language, "Battle results CSV", "ผลแบทเทิล CSV")}</button>
+        <button className="btn" onClick={() => void downloadCsv("feedbackcsv")}><Download size={16} />{t(language, "Feedback CSV", "แบบสอบถาม CSV")}</button>
+        <button className="btn btn--accent" onClick={() => navigate("/")}>{t(language, "Home", "หน้าแรก")}</button>
+      </div>
+    </main>;
+  }
+
   return <main className="presenter">
     <header className="app-header">
       <Brand compact />
@@ -146,6 +159,13 @@ export default function PresenterScreen({ code, token, language, onLanguage, the
       <div className="app-header-right">
         <span className="count-chip"><Users size={14} />{state.participantCount}</span>
         <LiveDot live={connected} language={language} />
+        {confirmEnd
+          ? <span className="end-confirm" role="alertdialog" aria-label={t(language, "Confirm end session", "ยืนยันการจบเซสชัน")}>
+            <span>{t(language, "End for everyone? This can't be undone.", "จบสำหรับทุกคน? ย้อนกลับไม่ได้")}</span>
+            <button className="btn btn--danger" disabled={busy} onClick={() => void send({ action: "end_room" })}><Square size={14} />{t(language, "End now", "จบเลย")}</button>
+            <button className="btn btn--ghost" onClick={() => setConfirmEnd(false)}>{t(language, "Cancel", "ยกเลิก")}</button>
+          </span>
+          : <button className="btn btn--ghost" onClick={() => setConfirmEnd(true)}><Square size={14} />{t(language, "End session", "จบเซสชัน")}</button>}
         <LanguageSwitch value={language} onChange={onLanguage} />
         <ThemeToggle theme={theme} onToggle={onTheme} language={language} />
       </div>
