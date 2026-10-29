@@ -121,6 +121,41 @@ export async function latestPublishedPlans(env: Env) {
   return rows.results.map((row) => ({ planId: row.plan_id, title: row.title, weekDate: row.week_date, snapshotId: row.snapshot_id, version: row.version }));
 }
 
+/** Freeze a plan's slides, challenge, cases and feedback wording into its next immutable version. */
+export async function publishPlan(env: Env, planId: string, audit: Audit) {
+  const db = env.DB;
+  const detail = await planDetail(env, planId);
+  if (!detail.slides.length) throw new HttpError(409, "Add at least one slide before publishing.");
+  const assetIds = new Set((await db.prepare("SELECT id FROM slide_assets").all<{ id: string }>()).results.map((row) => row.id));
+  const slides = detail.slides.map((slide, index) => {
+    // Re-validate on publish so a snapshot can only ever contain clean, current-schema slides.
+    const result = validateSlideDoc(slide.doc, { assetExists: (id) => assetIds.has(id) });
+    if (!result.ok) throw new HttpError(409, `Slide ${index + 1} ("${slide.title}") cannot be published: ${result.error}`);
+    return { sourceSlideId: slide.slideId, title: slide.title, doc: result.doc };
+  });
+  const version = (detail.latestVersion ?? 0) + 1;
+  const deck: PublishedDeck = {
+    schema: 1, planId, version, title: detail.title, weekDate: detail.weekDate, durationMin: detail.durationMin,
+    notes: detail.notes, challenge: detail.challenge, slides,
+    ...(detail.situations ? { situations: detail.situations } : {}),
+    ...(detail.feedbackQuestions ? { feedbackQuestions: detail.feedbackQuestions } : {}),
+  };
+  const deckJson = JSON.stringify(deck);
+  if (deckJson.length > MAX_DECK_BYTES) throw new HttpError(413, "This plan is too large to publish. Split it into two sessions.");
+  const snapshotId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  try {
+    await db.batch([
+      db.prepare("INSERT INTO training_snapshots (id, plan_id, version, deck_json, published_at) VALUES (?, ?, ?, ?, ?)").bind(snapshotId, planId, version, deckJson, now),
+      db.prepare("UPDATE training_plans SET status = 'published' WHERE id = ?").bind(planId),
+      audit("plan.publish", { planId, snapshotId, version, slides: slides.length }),
+    ]);
+  } catch {
+    throw new HttpError(409, "Someone else published this plan at the same moment. Reload and try again.");
+  }
+  return { snapshotId, version, publishedAt: now };
+}
+
 export async function handlePlans(path: string, method: string, request: Request, env: Env, audit: Audit): Promise<Response | null> {
   const db = env.DB;
 
@@ -217,36 +252,8 @@ export async function handlePlans(path: string, method: string, request: Request
     }
 
     if (planMatch[2] === "/publish" && method === "POST") {
-      const detail = await planDetail(env, planId);
-      if (!detail.slides.length) throw new HttpError(409, "Add at least one slide before publishing.");
-      const assetIds = new Set((await db.prepare("SELECT id FROM slide_assets").all<{ id: string }>()).results.map((row) => row.id));
-      const slides = detail.slides.map((slide, index) => {
-        // Re-validate on publish so a snapshot can only ever contain clean, current-schema slides.
-        const result = validateSlideDoc(slide.doc, { assetExists: (id) => assetIds.has(id) });
-        if (!result.ok) throw new HttpError(409, `Slide ${index + 1} ("${slide.title}") cannot be published: ${result.error}`);
-        return { sourceSlideId: slide.slideId, title: slide.title, doc: result.doc };
-      });
-      const version = (detail.latestVersion ?? 0) + 1;
-      const deck: PublishedDeck = {
-        schema: 1, planId, version, title: detail.title, weekDate: detail.weekDate, durationMin: detail.durationMin,
-        notes: detail.notes, challenge: detail.challenge, slides,
-        ...(detail.situations ? { situations: detail.situations } : {}),
-        ...(detail.feedbackQuestions ? { feedbackQuestions: detail.feedbackQuestions } : {}),
-      };
-      const deckJson = JSON.stringify(deck);
-      if (deckJson.length > MAX_DECK_BYTES) throw new HttpError(413, "This plan is too large to publish. Split it into two sessions.");
-      const snapshotId = crypto.randomUUID();
-      const now = new Date().toISOString();
-      try {
-        await db.batch([
-          db.prepare("INSERT INTO training_snapshots (id, plan_id, version, deck_json, published_at) VALUES (?, ?, ?, ?, ?)").bind(snapshotId, planId, version, deckJson, now),
-          db.prepare("UPDATE training_plans SET status = 'published' WHERE id = ?").bind(planId),
-          audit("plan.publish", { planId, snapshotId, version, slides: slides.length }),
-        ]);
-      } catch {
-        throw new HttpError(409, "Someone else published this plan at the same moment. Reload and try again.");
-      }
-      return json({ snapshot: { id: snapshotId, version, publishedAt: now }, plan: await planDetail(env, planId) }, 201);
+      const published = await publishPlan(env, planId, audit);
+      return json({ snapshot: { id: published.snapshotId, version: published.version, publishedAt: published.publishedAt }, plan: await planDetail(env, planId) }, 201);
     }
   }
 

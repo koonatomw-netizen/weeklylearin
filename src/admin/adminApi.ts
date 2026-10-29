@@ -80,6 +80,7 @@ export const adminApi = {
   createCaseSet: (title: string, situations: Situation[]) => call<{ set: CaseSet }>("/case-sets", send("POST", { title, situations })),
   updateCaseSet: (id: string, data: { title?: string; situations?: Situation[] }) => call<{ set: CaseSet }>(`/case-sets/${id}`, send("PATCH", data)),
   deleteCaseSet: (id: string) => call<{ ok: true }>(`/case-sets/${id}`, { method: "DELETE" }),
+  seedWeek01Plan: () => call<{ planId: string; created: boolean; version?: number }>("/seed/week01-plan", send("POST")),
   seedWeek02: () => call<{ lesson: AdminLessonDetail; planId: string; created: boolean }>("/seed/week02", send("POST")),
   seedWeek01: () => call<{ lesson: AdminLessonDetail; created: boolean }>("/seed/week01", send("POST")),
   addSlide: (lessonId: string, data: { template?: TemplateId; duplicateOf?: string; afterSlideId?: string; title?: string }) =>

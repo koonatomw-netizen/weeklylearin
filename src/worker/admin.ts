@@ -1,10 +1,11 @@
 import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, detectImage } from "../shared/imageInfo";
 import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDoc";
+import { WEEK01_CHALLENGE } from "../shared/challenge";
 import { TEMPLATE_IDS, createFromTemplate, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
 import { WEEK02_CHALLENGE, WEEK02_FEEDBACK, WEEK02_NOTES, WEEK02_SITUATIONS, WEEK02_TITLE, week02Lesson } from "../shared/week02";
 import { HttpError, cleanLine, json, readBody } from "./http";
 import { handleCaseSets } from "./caseSets";
-import { handlePlans } from "./plans";
+import { handlePlans, publishPlan } from "./plans";
 import { randomSecret, sha256, type Env } from "./room-hub";
 
 /** Admin workspace API. Every route except login requires a valid admin session. */
@@ -12,6 +13,7 @@ import { randomSecret, sha256, type Env } from "./room-hub";
 const SESSION_HOURS = 12;
 const STARTER_LESSON_ID = "week01-starter";
 const STARTER_SKILLS_LESSON_ID = "week01-skills-starter";
+const WEEK01_PLAN_ID = "week01-starter-plan";
 const WEEK02_LESSON_ID = "week02-starter";
 const WEEK02_PLAN_ID = "week02-starter-plan";
 
@@ -48,6 +50,28 @@ const slideView = (row: SlideRow) => ({
 });
 
 const newElementId = () => `el-${crypto.randomUUID().slice(0, 12)}`;
+
+/**
+ * A Week 01 lesson imported now already ends with the Skills slides. One imported before they existed has only the
+ * original seven, so the Skills segment is offered as its own lesson. Returns whether the Week 01 lesson is complete.
+ */
+async function ensureSkillsCoverage(env: Env, audit: (action: string, detail?: Record<string, unknown>) => D1PreparedStatement): Promise<boolean> {
+  const db = env.DB;
+  if (!(await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(STARTER_LESSON_ID).first())) return true;
+  if (await db.prepare("SELECT id FROM slides WHERE lesson_id = ? AND title = 'Skills: Write It Once'").bind(STARTER_LESSON_ID).first()) return true;
+  if (!(await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(STARTER_SKILLS_LESSON_ID).first())) {
+    const now = new Date().toISOString();
+    const skills = skillsLesson(newElementId);
+    await db.batch([
+      db.prepare("INSERT INTO lessons (id, title, category, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(STARTER_SKILLS_LESSON_ID, "Week 01 · Part 2: Skills", "Prompt Engineering", "Reusable instructions (skills) segment. Add it after Final Results in the Week 01 plan.", now, now),
+      ...skills.map((slide, index) => db.prepare("INSERT INTO slides (id, lesson_id, position, title, doc_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+        .bind(crypto.randomUUID(), STARTER_SKILLS_LESSON_ID, index, slide.title, JSON.stringify(slide.doc), now, now)),
+      audit("lesson.seed_skills", { slides: skills.length }),
+    ]);
+  }
+  return false;
+}
 
 export async function handleAdmin(request: Request, env: Env, url: URL): Promise<Response> {
   try {
@@ -232,20 +256,8 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     return json({ lesson: await getLesson(env, id) }, 201);
   }
   if (path === "/seed/week01" && method === "POST") {
-    // The Skills segment used to live only in code; import it as its own lesson so it is editable here too.
-    if (!(await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(STARTER_SKILLS_LESSON_ID).first())) {
-      const now = new Date().toISOString();
-      const skills = skillsLesson(newElementId);
-      await db.batch([
-        db.prepare("INSERT INTO lessons (id, title, category, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
-          .bind(STARTER_SKILLS_LESSON_ID, "Week 01 · Part 2: Skills", "Prompt Engineering", "Reusable instructions (skills) segment — imported from the built-in deck.", now, now),
-        ...skills.map((slide, index) => db.prepare("INSERT INTO slides (id, lesson_id, position, title, doc_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
-          .bind(crypto.randomUUID(), STARTER_SKILLS_LESSON_ID, index, slide.title, JSON.stringify(slide.doc), now, now)),
-        audit("lesson.seed_skills", { slides: skills.length }),
-      ]);
-    }
     const existing = await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(STARTER_LESSON_ID).first();
-    if (existing) return json({ lesson: await getLesson(env, STARTER_LESSON_ID), created: false });
+    if (existing) { await ensureSkillsCoverage(env, audit); return json({ lesson: await getLesson(env, STARTER_LESSON_ID), created: false }); }
     const now = new Date().toISOString();
     const slides = week01Lesson(newElementId);
     await db.batch([
@@ -256,6 +268,25 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
       audit("lesson.seed_week01", { slides: slides.length }),
     ]);
     return json({ lesson: await getLesson(env, STARTER_LESSON_ID), created: true }, 201);
+  }
+
+  if (path === "/seed/week01-plan" && method === "POST") {
+    // Week 01 as a published session: the Week 01 lesson followed by the Skills lesson, with the Guest Communication challenge.
+    if (await db.prepare("SELECT id FROM training_plans WHERE id = ?").bind(WEEK01_PLAN_ID).first()) return json({ planId: WEEK01_PLAN_ID, created: false });
+    if (!(await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(STARTER_LESSON_ID).first())) throw new HttpError(409, "Import the Week 01 starter lesson in the Lesson Library first.");
+    const complete = await ensureSkillsCoverage(env, audit);
+    const slideRows = await db.prepare(`SELECT id FROM slides WHERE lesson_id IN (?, ?)
+      ORDER BY CASE lesson_id WHEN ? THEN 0 ELSE 1 END, position, created_at`).bind(STARTER_LESSON_ID, complete ? STARTER_LESSON_ID : STARTER_SKILLS_LESSON_ID, STARTER_LESSON_ID).all<{ id: string }>();
+    const now = new Date().toISOString();
+    await db.batch([
+      db.prepare(`INSERT INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, status, created_at, updated_at)
+        VALUES (?, ?, NULL, 60, ?, ?, 'draft', ?, ?)`)
+        .bind(WEEK01_PLAN_ID, "Week 01 · Prompt Engineering", "Prompt Engineering with Prompt Battle, then reusable skills. Uses the built-in case pool.", JSON.stringify(WEEK01_CHALLENGE), now, now),
+      ...slideRows.results.map((row, index) => db.prepare("INSERT INTO training_plan_slides (plan_id, slide_id, position) VALUES (?, ?, ?)").bind(WEEK01_PLAN_ID, row.id, index)),
+      audit("plan.seed_week01", { slides: slideRows.results.length }),
+    ]);
+    const published = await publishPlan(env, WEEK01_PLAN_ID, audit);
+    return json({ planId: WEEK01_PLAN_ID, version: published.version, created: true }, 201);
   }
 
   if (path === "/seed/week02" && method === "POST") {

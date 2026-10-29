@@ -30,6 +30,7 @@ export default function Planner({ language }: { language: Language }) {
   const [weekDate, setWeekDate] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(() => adminApi.plans().then((result) => setPlans(result.plans)).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load plans.")), []);
   useEffect(() => { void load(); }, [load]);
@@ -60,11 +61,28 @@ export default function Planner({ language }: { language: Language }) {
     finally { setBusy(false); }
   }
 
+  async function makeWeek01() {
+    setBusy(true);
+    setError("");
+    try {
+      await adminApi.seedWeek01();
+      await adminApi.seedWeek01Plan();
+      await load();
+      setNotice(t(language, "Week 01 is published. It now shows in the presenter's session list on the home page.", "เผยแพร่สัปดาห์ที่ 1 แล้ว จะแสดงในรายการเซสชันของผู้สอนที่หน้าแรก"));
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not create the Week 01 session."); }
+    finally { setBusy(false); }
+  }
+
   if (openId) return <PlanEditor key={openId} planId={openId} language={language} onBack={() => open(null)} onOpen={open} />;
 
   return <>
     <div className="admin-title"><div><h1>Weekly Planner</h1><p>{t(language, "Plan each week's session, then publish a frozen version to teach from.", "วางแผนแต่ละสัปดาห์ แล้วเผยแพร่เวอร์ชันที่ล็อกไว้เพื่อใช้สอน")}</p></div></div>
     {error && <Notice>{error}</Notice>}
+    {notice && <Notice kind="success">{notice}</Notice>}
+    {plans && !plans.some((plan) => plan.id === "week01-starter-plan") && <Notice kind="info">
+      <span>{t(language, "Week 01 isn't set up as a session yet. ", "ยังไม่ได้ตั้งสัปดาห์ที่ 1 เป็นเซสชัน ")}</span>
+      <button className="btn btn--accent" disabled={busy} onClick={() => void makeWeek01()}><Rocket size={14} />{t(language, "Create and publish Week 01", "สร้างและเผยแพร่สัปดาห์ที่ 1")}</button>
+    </Notice>}
     <TerminalWindow title="new-plan">
       <form className="plan-new" onSubmit={create}>
         <label><span className="field-label">{t(language, "title", "ชื่อแผน")}</span><input className="input" value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} placeholder={t(language, "e.g. Week 02 · Handling complaints", "เช่น สัปดาห์ที่ 2 · การรับมือคำร้องเรียน")} /></label>

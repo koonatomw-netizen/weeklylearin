@@ -177,8 +177,8 @@ log('push to live room: admin-only, same plan and newer version only, slide kept
 
 // ------------------------------------- content that used to be fixed in code
 const lessonsAfterSeed = (await request('/api/admin/lessons', { token: admin })).lessons;
-const skillsLesson = lessonsAfterSeed.find((item) => item.title === 'Week 01 · Part 2: Skills');
-check(skillsLesson && skillsLesson.slideCount === 6, 'The Skills segment is importable as its own editable lesson.');
+const week01Starter = lessonsAfterSeed.find((item) => item.id === 'week01-starter');
+check(week01Starter && week01Starter.slideCount === 13, 'The imported Week 01 lesson includes the Skills segment (13 editable slides).');
 
 const caseA = { rarity: 'common', challenge: { titleEn: 'Slow report', scenarioEn: 'The weekly report takes two hours.', taskEn: 'Write a prompt that drafts it from notes.' } };
 const caseB = { rarity: 'rare', challenge: { titleEn: 'Inbox flood', scenarioEn: '80 unread emails after a holiday.', taskEn: 'Write a prompt that sorts them by urgency.' } };
@@ -244,6 +244,19 @@ check((await request(`/api/admin/plans/${copy.id}`, { token: admin })).plan.situ
 await request(`/api/admin/case-sets/${mine.id}`, { method: 'DELETE', token: admin });
 await request(`/api/admin/case-sets/${mine.id}`, { method: 'PATCH', token: admin, data: { title: 'x' }, expected: 404 });
 log('case sets: starter import, validation, edit, copy-not-link, delete');
+
+// ------------------------------------------------ Week 01 as a published session
+const w1 = await request('/api/admin/seed/week01-plan', { method: 'POST', token: admin, expected: [200, 201] });
+check(w1.planId === 'week01-starter-plan', 'Week 01 can be created as a plan.');
+check((await request('/api/admin/seed/week01-plan', { method: 'POST', token: admin, expected: 200 })).created === false, 'Creating the Week 01 plan twice is a no-op.');
+const w1Plan = (await request('/api/admin/plans/week01-starter-plan', { token: admin })).plan;
+check(w1Plan.slides.length === 13 && w1Plan.latestVersion >= 1 && w1Plan.challenge.titleEn === 'Guest Communication', 'The Week 01 plan has 13 slides, is published and carries the Guest Communication challenge.');
+const w1Offered = (await request('/api/presenter/plans', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass } })).plans.find((item) => item.planId === 'week01-starter-plan');
+check(w1Offered && w1Offered.title === 'Week 01 · Prompt Engineering', 'Week 01 appears in the presenter list on the home page.');
+const w1Room = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { snapshotId: w1Offered.snapshotId }, expected: 201 });
+const w1State = (await request(`/api/rooms/${w1Room.roomCode}/state`, { token: w1Room.hostToken })).state;
+check(w1State.totalSlides === 13 && w1State.casePool === null, 'A Week 01 room presents 13 slides and uses the built-in case pool.');
+log('Week 01 session: plan, publish, presenter list, live room');
 
 // ------------------------------------------------------- legacy rooms
 const legacy = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { builtIn: true }, expected: 201 });

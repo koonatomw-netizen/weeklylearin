@@ -25,7 +25,7 @@ function allowCreate(ip: string): boolean {
     return true;
   }
   bucket.count += 1;
-  return bucket.count <= 10;
+  return bucket.count <= 20;
 }
 
 /** Presenter passphrase check shared by the room endpoints. Returns an error response, or null when the caller may continue. */
