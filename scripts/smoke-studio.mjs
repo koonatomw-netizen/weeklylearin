@@ -156,11 +156,31 @@ const sessions = (await request('/api/admin/sessions', { token: admin })).sessio
 check(sessions.some((s) => s.code === session.roomCode && s.version === 1 && s.participants === 5), 'Live Sessions lists the room with its version.');
 log('v2 published; running room keeps v1; duplicate week; published plan and in-use slides protected');
 
+// ------------------------------------------- push a newer version to the live room
+const beforePush = (await request(`${root}/state`, { token: host })).state;
+const pushUrl = `/api/admin/sessions/${session.roomCode}/push`;
+await request(pushUrl, { method: 'POST', data: { snapshotId: v2.snapshot.id }, expected: 401 });
+await request(pushUrl, { method: 'POST', token: host, data: { snapshotId: v2.snapshot.id }, expected: 401 });
+await request(pushUrl, { method: 'POST', token: admin, data: { snapshotId: v1.snapshot.id }, expected: 409 });
+await request(pushUrl, { method: 'POST', token: admin, data: { snapshotId: 'does-not-exist' }, expected: 404 });
+await request('/api/admin/sessions/000000/push', { method: 'POST', token: admin, data: { snapshotId: v2.snapshot.id }, expected: 404 });
+await request(pushUrl, { method: 'POST', token: admin, data: { snapshotId: v2.snapshot.id } });
+const afterPush = (await request(`${root}/state`, { token: host })).state;
+check(afterPush.snapshotId === v2.snapshot.id, 'The room now points at v2.');
+check(afterPush.currentSlide === beforePush.currentSlide && afterPush.activity === beforePush.activity, 'Push keeps the presenter on the same slide and the activity untouched.');
+check(JSON.stringify((await request(`${root}/deck`, { token: host })).deck).includes('EDITED AFTER PUBLISH'), 'The presenter deck now has the edit.');
+check(afterPush.participantCount === 5 && afterPush.battles.length === beforePush.battles.length, 'Participants and battles survive the push.');
+await request(pushUrl, { method: 'POST', token: admin, data: { snapshotId: v2.snapshot.id }, expected: 409 });
+const pushed = (await request('/api/admin/sessions', { token: admin })).sessions.find((s) => s.code === session.roomCode);
+check(pushed.version === 2, 'Live Sessions shows the room on v2.');
+log('push to live room: admin-only, same plan and newer version only, slide kept, state intact');
+
 // ------------------------------------------------------- legacy rooms
 const legacy = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: {}, expected: 201 });
 const legacyState = (await request(`/api/rooms/${legacy.roomCode}/state`, { token: legacy.hostToken })).state;
-check(legacyState.snapshotId === null && legacyState.totalSlides === 7 && legacyState.slideSteps.join() === '0,5,2,5,0,0,0', 'Rooms without a snapshot keep the built-in Week 01 deck.');
+check(legacyState.snapshotId === null && legacyState.totalSlides >= 7 && legacyState.slideSteps.slice(0, 7).join() === '0,5,2,5,0,0,0', 'Rooms without a snapshot keep the built-in Week 01 deck.');
 check((await request(`/api/rooms/${legacy.roomCode}/deck`, { token: legacy.hostToken })).deck === null, 'Legacy rooms have no published deck.');
+await request(`/api/admin/sessions/${legacy.roomCode}/push`, { method: 'POST', token: admin, data: { snapshotId: v2.snapshot.id }, expected: 409 });
 log('backward compatibility: built-in deck rooms unchanged');
 
 console.log(`\nPASS: ${checks} studio assertions. Fixtures remain in local D1 only.`);

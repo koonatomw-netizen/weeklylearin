@@ -1,5 +1,5 @@
 import { DEFAULT_CHALLENGE, validateChallenge, type Challenge, type PublishedDeck } from "../shared/deck";
-import { validateSlideDoc, type SlideDoc } from "../shared/slideDoc";
+import { stepCount, validateSlideDoc, type SlideDoc } from "../shared/slideDoc";
 import { HttpError, cleanBlock, cleanLine, json, readBody } from "./http";
 import { makeRoomCode, randomSecret, sha256, type Env } from "./room-hub";
 
@@ -222,6 +222,40 @@ export async function handlePlans(path: string, method: string, request: Request
       ]);
       return json({ roomCode, hostToken, title: deck.title }, 201);
     }
+  }
+
+  const pushMatch = path.match(/^\/sessions\/(\d{6})\/push$/);
+  if (pushMatch && method === "POST") {
+    // Move a running room onto a newer published version of the same plan. Snapshots stay immutable;
+    // only the room's pointer changes, and the room is told to re-read its deck.
+    const code = pushMatch[1];
+    const body = await readBody(request, 1_000);
+    const targetId = typeof body.snapshotId === "string" ? body.snapshotId : "";
+    const room = await db.prepare("SELECT code, current_slide, slide_step, snapshot_id, ended_at FROM rooms WHERE code = ?").bind(code)
+      .first<{ code: string; current_slide: number; slide_step: number; snapshot_id: string | null; ended_at: string | null }>();
+    if (!room) throw new HttpError(404, "Training session not found.");
+    if (room.ended_at) throw new HttpError(409, "This session has ended, so it can't be updated.");
+    if (!room.snapshot_id) throw new HttpError(409, "This room uses the built-in deck, which can't be updated from the studio.");
+    const [current, target] = await Promise.all([
+      db.prepare("SELECT plan_id, version, deck_json FROM training_snapshots WHERE id = ?").bind(room.snapshot_id).first<{ plan_id: string; version: number; deck_json: string }>(),
+      db.prepare("SELECT id, plan_id, version, deck_json FROM training_snapshots WHERE id = ?").bind(targetId).first<{ id: string; plan_id: string; version: number; deck_json: string }>(),
+    ]);
+    if (!current || !target) throw new HttpError(404, "Published version not found.");
+    if (target.plan_id !== current.plan_id) throw new HttpError(409, "That version belongs to a different plan.");
+    if (target.version <= current.version) throw new HttpError(409, "The room is already on this version or a newer one.");
+    // Keep the presenter on the same slide even if slides were added or removed before it.
+    const oldSlides = (JSON.parse(current.deck_json) as PublishedDeck).slides;
+    const newSlides = (JSON.parse(target.deck_json) as PublishedDeck).slides;
+    const sourceId = oldSlides[room.current_slide]?.sourceSlideId;
+    const found = sourceId ? newSlides.findIndex((slide) => slide.sourceSlideId === sourceId) : -1;
+    const slide = found >= 0 ? found : Math.min(Math.max(0, room.current_slide), newSlides.length - 1);
+    const step = found >= 0 ? Math.min(room.slide_step, stepCount(newSlides[slide].doc)) : 0;
+    const moved = await db.prepare("UPDATE rooms SET snapshot_id = ?, current_slide = ?, slide_step = ? WHERE code = ? AND snapshot_id = ? AND ended_at IS NULL")
+      .bind(target.id, slide, step, code, room.snapshot_id).run();
+    if (!moved.meta.changes) throw new HttpError(409, "The room changed while updating. Reload and try again.");
+    await audit("session.push", { roomCode: code, from: current.version, to: target.version, snapshotId: target.id }).run();
+    await env.ROOMS.get(env.ROOMS.idFromName(code)).fetch("https://room/refresh", { method: "POST" });
+    return json({ ok: true, version: target.version });
   }
 
   if (path === "/sessions" && method === "GET") {

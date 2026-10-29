@@ -88,6 +88,7 @@ export const adminApi = {
   publishPlan: (id: string) => call<{ snapshot: { id: string; version: number; publishedAt: string }; plan: AdminPlanDetail }>(`/plans/${id}/publish`, send("POST")),
   snapshot: (id: string) => call<{ snapshot: { id: string; publishedAt: string; deck: PublishedDeck } }>(`/snapshots/${id}`),
   startSession: (snapshotId: string) => call<{ roomCode: string; hostToken: string; title: string }>(`/snapshots/${snapshotId}/session`, send("POST")),
+  pushToSession: (code: string, snapshotId: string) => call<{ ok: true; version: number }>(`/sessions/${code}/push`, send("POST", { snapshotId })),
   sessions: () => call<{ sessions: AdminSession[] }>("/sessions"),
   feedbackReport: () => call<{ sessions: FeedbackReportRow[] }>("/feedback/report"),
   recurringIssues: () => call<{ issues: RecurringIssue[] }>("/issue-tags"),

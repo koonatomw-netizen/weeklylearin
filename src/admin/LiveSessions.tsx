@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Radio, RefreshCw } from "lucide-react";
+import { ExternalLink, Radio, RefreshCw, Upload } from "lucide-react";
 import { tokens } from "../api";
 import type { Language } from "../shared/types";
 import { Notice, TerminalWindow, formatCode, t } from "../ui";
@@ -33,6 +33,22 @@ export default function LiveSessions({ language, navigate }: { language: Languag
     finally { setBusy(false); }
   }
 
+  async function push(session: AdminSession, plan: AdminPlan) {
+    if (!plan.latestSnapshotId || busy) return;
+    const ok = window.confirm(t(language,
+      `Update room ${formatCode(session.code)} to v${plan.latestVersion}? Everyone in the room switches to the new slides now, and the presenter stays on the same slide.`,
+      `อัปเดตห้อง ${formatCode(session.code)} เป็น v${plan.latestVersion}? ทุกคนในห้องจะเห็นสไลด์ใหม่ทันที และผู้สอนอยู่ที่สไลด์เดิม`));
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    try {
+      await adminApi.pushToSession(session.code, plan.latestSnapshotId);
+      setNotice(t(language, `Room ${formatCode(session.code)} now shows v${plan.latestVersion}.`, `ห้อง ${formatCode(session.code)} แสดง v${plan.latestVersion} แล้ว`));
+      load();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not update the room."); }
+    finally { setBusy(false); }
+  }
+
   return <>
     <div className="admin-title"><div><h1>Live Sessions</h1><p>{t(language, "Each session presents a frozen published version, so the room always sees exactly what you approved.", "ทุกห้องใช้เวอร์ชันที่เผยแพร่และล็อกแล้ว ผู้เข้าร่วมจึงเห็นตรงตามที่อนุมัติ")}</p></div>
       <button className="btn btn--ghost" onClick={load}><RefreshCw size={15} />{t(language, "Refresh", "รีเฟรช")}</button></div>
@@ -52,6 +68,8 @@ export default function LiveSessions({ language, navigate }: { language: Languag
         <thead><tr><th>{t(language, "room", "ห้อง")}</th><th>{t(language, "deck", "สไลด์")}</th><th>{t(language, "started", "เริ่ม")}</th><th>{t(language, "stage", "ขั้น")}</th><th>{t(language, "people", "คน")}</th><th>{t(language, "feedback", "แบบสอบถาม")}</th><th /></tr></thead>
         <tbody>{sessions.map((session) => {
           const canOpen = Boolean(tokens.host(session.code));
+          const plan = plans?.find((item) => item.id === session.planId);
+          const canPush = !session.endedAt && plan && plan.latestSnapshotId && plan.latestVersion !== null && session.version !== null && plan.latestVersion > session.version;
           return <tr key={session.code}>
             <td className="mono">{formatCode(session.code)}</td>
             <td>{session.title}{session.version ? <span className="mono-dim"> · v{session.version}</span> : <span className="mono-dim"> · built-in</span>}</td>
@@ -59,8 +77,10 @@ export default function LiveSessions({ language, navigate }: { language: Languag
             <td className="mono-dim">{session.endedAt ? t(language, "ended", "สิ้นสุดแล้ว") : session.activity}</td>
             <td className="mono">{session.participants}</td>
             <td className="mono">{session.feedback}/{session.participants}</td>
-            <td>{canOpen
-              ? <button className="btn btn--ghost" onClick={() => navigate(`/?view=host&room=${session.code}`)}><ExternalLink size={13} />{t(language, "Presenter", "ผู้สอน")}</button>
+            <td>{canPush && plan && <button className="btn btn--accent" disabled={busy} onClick={() => void push(session, plan)}><Upload size={13} />{t(language, `Update to v${plan.latestVersion}`, `อัปเดตเป็น v${plan.latestVersion}`)}</button>}
+              {!session.endedAt && plan?.hasUnpublishedChanges && <span className="mono-dim" title={t(language, "Publish the plan first, then update the room.", "เผยแพร่แผนก่อน แล้วจึงอัปเดตห้อง")}> {t(language, "unpublished edits", "มีการแก้ที่ยังไม่เผยแพร่")} </span>}
+              {canOpen
+              ?<button className="btn btn--ghost" onClick={() => navigate(`/?view=host&room=${session.code}`)}><ExternalLink size={13} />{t(language, "Presenter", "ผู้สอน")}</button>
               : <span className="mono-dim" title={t(language, "Presenter access stays in the browser that started the room.", "สิทธิ์ผู้สอนอยู่ในเบราว์เซอร์ที่เริ่มห้อง")}>—</span>}</td>
           </tr>;
         })}</tbody>

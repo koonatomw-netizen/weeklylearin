@@ -53,8 +53,9 @@ export const castVote = (code: string, token: string, battleId: string, entryId:
 export const control = (code: string, token: string, action: ControlAction) =>
   jsonRequest<RoomEnvelope>(room(code, "control"), { method: "POST", headers: auth(token), body: JSON.stringify(action) });
 
-export const getDeck = (code: string, token: string) =>
-  jsonRequest<{ snapshotId: string | null; deck: PublishedDeck | null }>(room(code, "deck"), { headers: auth(token) });
+// The version is part of the URL so a room moved to a newer deck never reuses the browser's cached copy of the old one.
+export const getDeck = (code: string, token: string, snapshotId?: string | null) =>
+  jsonRequest<{ snapshotId: string | null; deck: PublishedDeck | null }>(`${room(code, "deck")}${snapshotId ? `?v=${encodeURIComponent(snapshotId)}` : ""}`, { headers: auth(token) });
 
 export const submitFeedback = (code: string, token: string, answers: FeedbackAnswers) =>
   jsonRequest<RoomEnvelope>(room(code, "feedback"), { method: "POST", headers: auth(token), body: JSON.stringify(answers) });

@@ -106,6 +106,8 @@ export class RoomHub {
     const { pathname } = new URL(request.url);
     try {
       if (pathname === "/ws") return await this.connectSocket(request);
+      // Internal only (the public router has no "refresh" action): the studio moved this room to a newer deck.
+      if (pathname === "/refresh" && request.method === "POST") { await this.broadcast(); return json({ ok: true }); }
       const room = await this.getRoom();
       if (!room) return json({ error: "Room not found. Check the six-digit room code." }, 404);
       // An ended room is read-only: state, deck and exports still work; everything that changes the room is refused.

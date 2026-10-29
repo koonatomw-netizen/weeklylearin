@@ -15,7 +15,7 @@ export function useDeck(code: string, token: string, snapshotId: string | null |
     if (!snapshotId) { setDeck(null); return; }
     let active = true;
     const load = (attempt: number) => {
-      getDeck(code, token)
+      getDeck(code, token, snapshotId)
         .then((result) => { if (active) { setDeck(result.deck); setError(""); } })
         .catch((caught) => {
           if (!active) return;
