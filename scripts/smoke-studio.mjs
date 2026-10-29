@@ -225,6 +225,26 @@ const week02State = (await request(`/api/rooms/${week02Room.roomCode}/state`, { 
 check(week02State.totalSlides === 13 && week02State.casePool.length === 6 && week02State.title.startsWith('Week 02'), 'A room from the Week 02 starter presents 13 slides with its own case pool.');
 log('Week 02 starter: lesson, draft plan, publish and a live room');
 
+// ------------------------------------------------------------ case sets
+await request('/api/admin/case-sets', { expected: 401 });
+const seeded = (await request('/api/admin/seed/cases', { method: 'POST', token: admin })).sets;
+check(seeded.find((s) => s.id === 'week01-cases')?.situations.length === 15 && seeded.find((s) => s.id === 'week02-cases')?.situations.length === 6, 'Starter case sets import the 15 built-in cases and the 6 Week 02 chore cases.');
+check((await request('/api/admin/seed/cases', { method: 'POST', token: admin })).sets.length === seeded.length, 'Importing the starter sets twice is a no-op.');
+await request('/api/admin/case-sets', { method: 'POST', token: admin, data: { title: '' }, expected: 400 });
+await request('/api/admin/case-sets', { method: 'POST', token: admin, data: { title: 'Bad', situations: [{ rarity: 'mythic', challenge: caseA.challenge }] }, expected: 400 });
+const mine = (await request('/api/admin/case-sets', { method: 'POST', token: admin, data: { title: 'Week 03 · Check the work', situations: [caseA, caseB] }, expected: 201 })).set;
+check(mine.situations.length === 2 && mine.situations[0].challenge.titleTh === 'Slow report', 'A new set validates its cases and falls back to English for Thai.');
+const renamed = (await request(`/api/admin/case-sets/${mine.id}`, { method: 'PATCH', token: admin, data: { title: 'Week 03 cases', situations: [caseB] } })).set;
+check(renamed.title === 'Week 03 cases' && renamed.situations.length === 1, 'A set can be renamed and its cases replaced.');
+await request(`/api/admin/case-sets/${mine.id}`, { method: 'PATCH', token: admin, data: { situations: 'nope' }, expected: 400 });
+// A plan copies a set; editing the set afterwards never changes the plan.
+const planWithSet = (await request(`/api/admin/plans/${copy.id}`, { method: 'PATCH', token: admin, data: { situations: renamed.situations } })).plan;
+await request(`/api/admin/case-sets/${mine.id}`, { method: 'PATCH', token: admin, data: { situations: [caseA, caseB] } });
+check((await request(`/api/admin/plans/${copy.id}`, { token: admin })).plan.situations.length === planWithSet.situations.length, 'Editing a set does not change plans that copied it.');
+await request(`/api/admin/case-sets/${mine.id}`, { method: 'DELETE', token: admin });
+await request(`/api/admin/case-sets/${mine.id}`, { method: 'PATCH', token: admin, data: { title: 'x' }, expected: 404 });
+log('case sets: starter import, validation, edit, copy-not-link, delete');
+
 // ------------------------------------------------------- legacy rooms
 const legacy = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { builtIn: true }, expected: 201 });
 const legacyState = (await request(`/api/rooms/${legacy.roomCode}/state`, { token: legacy.hostToken })).state;

@@ -3,6 +3,7 @@ import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDo
 import { TEMPLATE_IDS, createFromTemplate, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
 import { WEEK02_CHALLENGE, WEEK02_FEEDBACK, WEEK02_NOTES, WEEK02_SITUATIONS, WEEK02_TITLE, week02Lesson } from "../shared/week02";
 import { HttpError, cleanLine, json, readBody } from "./http";
+import { handleCaseSets } from "./caseSets";
 import { handlePlans } from "./plans";
 import { randomSecret, sha256, type Env } from "./room-hub";
 
@@ -352,6 +353,8 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   // -------------------------------------------- plans, snapshots, live sessions
+  const cased = await handleCaseSets(path, method, request, env, audit);
+  if (cased) return cased;
   const planned = await handlePlans(path, method, request, env, audit);
   if (planned) return planned;
 

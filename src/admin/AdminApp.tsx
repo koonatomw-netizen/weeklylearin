@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { BarChart3, CalendarDays, LayoutDashboard, Library as LibraryIcon, LogOut, MessageSquareText, PanelsTopLeft, Plus, Radio, LockKeyhole } from "lucide-react";
+import { BarChart3, CalendarDays, Dices, LayoutDashboard, Library as LibraryIcon, LogOut, MessageSquareText, PanelsTopLeft, Plus, Radio, LockKeyhole } from "lucide-react";
 import type { Language } from "../shared/types";
 import type { Theme } from "../theme";
 import { Brand, Cmd, Cursor, LanguageSwitch, Notice, TerminalWindow, ThemeToggle, t } from "../ui";
 import { SESSION_ENDED, adminApi, adminToken, type Dashboard } from "./adminApi";
 import Builder from "./Builder";
+import CaseSets from "./CaseSets";
 import Library from "./Library";
 import LiveSessions from "./LiveSessions";
 import Planner from "./Planner";
 import { FeedbackReports, TrainingHistory } from "./Reports";
 
-type Section = "dashboard" | "planner" | "library" | "builder" | "live" | "feedback" | "history";
+type Section = "dashboard" | "planner" | "library" | "builder" | "cases" | "live" | "feedback" | "history";
 
 const SECTIONS: Array<{ id: Section; en: string; th: string; icon: ReactNode; phase?: number }> = [
   { id: "dashboard", en: "Dashboard", th: "ภาพรวม", icon: <LayoutDashboard size={17} /> },
   { id: "planner", en: "Weekly Planner", th: "แผนรายสัปดาห์", icon: <CalendarDays size={17} /> },
   { id: "library", en: "Lesson Library", th: "คลังบทเรียน", icon: <LibraryIcon size={17} /> },
   { id: "builder", en: "Slide Builder", th: "สร้างสไลด์", icon: <PanelsTopLeft size={17} /> },
+  { id: "cases", en: "Case Sets", th: "ชุดเคส", icon: <Dices size={17} /> },
   { id: "live", en: "Live Sessions", th: "ห้องเรียนสด", icon: <Radio size={17} /> },
   { id: "feedback", en: "Feedback", th: "แบบสอบถาม", icon: <MessageSquareText size={17} /> },
   { id: "history", en: "Training History", th: "ประวัติการอบรม", icon: <BarChart3 size={17} /> },
@@ -95,6 +97,7 @@ export default function AdminApp({ language, onLanguage, theme, onTheme, navigat
       {section === "library" && <Library language={language} onEdit={openBuilder} />}
       {section === "builder" && <Builder language={language} lessonId={target.lessonId} slideId={target.slideId} onOpen={openBuilder} />}
       {section === "planner" && <Planner language={language} />}
+      {section === "cases" && <CaseSets language={language} />}
       {section === "live" && <LiveSessions language={language} navigate={navigate} />}
       {section === "feedback" && <FeedbackReports language={language} />}
       {section === "history" && <TrainingHistory language={language} />}

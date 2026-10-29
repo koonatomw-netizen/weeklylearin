@@ -30,6 +30,7 @@ export interface SessionHistory {
   battles: Array<{ id: string; round: string; sequence: number; status: string; revealed: boolean; resolutionNote: string; entries: Array<{ nickname: string | null; prompt: string; votes: number | null; winner: boolean }> }>;
   tags: SessionTag[];
 }
+export interface CaseSet { id: string; title: string; situations: Situation[]; createdAt: string; updatedAt: string }
 export interface AdminAsset { id: string; mime: string; bytes: number; width: number | null; height: number | null; createdAt: string }
 export interface Dashboard { lessons: number; slides: number; sessions: number; feedback: number; recent: Array<{ action: string; createdAt: string }> }
 
@@ -74,6 +75,11 @@ export const adminApi = {
   createLesson: (data: { title: string; category?: string }) => call<{ lesson: AdminLessonDetail }>("/lessons", send("POST", data)),
   updateLesson: (id: string, data: Partial<{ title: string; category: string; description: string; archived: boolean }>) =>
     call<{ lesson: AdminLessonDetail }>(`/lessons/${id}`, send("PATCH", data)),
+  caseSets: () => call<{ sets: CaseSet[] }>("/case-sets"),
+  seedCaseSets: () => call<{ sets: CaseSet[] }>("/seed/cases", send("POST")),
+  createCaseSet: (title: string, situations: Situation[]) => call<{ set: CaseSet }>("/case-sets", send("POST", { title, situations })),
+  updateCaseSet: (id: string, data: { title?: string; situations?: Situation[] }) => call<{ set: CaseSet }>(`/case-sets/${id}`, send("PATCH", data)),
+  deleteCaseSet: (id: string) => call<{ ok: true }>(`/case-sets/${id}`, { method: "DELETE" }),
   seedWeek02: () => call<{ lesson: AdminLessonDetail; planId: string; created: boolean }>("/seed/week02", send("POST")),
   seedWeek01: () => call<{ lesson: AdminLessonDetail; created: boolean }>("/seed/week01", send("POST")),
   addSlide: (lessonId: string, data: { template?: TemplateId; duplicateOf?: string; afterSlideId?: string; title?: string }) =>
