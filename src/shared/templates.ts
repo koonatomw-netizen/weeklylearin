@@ -1,6 +1,6 @@
 import type { ColorToken, FontSize, Paragraph, SlideDoc, SlideElement, TextElement, WidgetKind } from "./slideDoc";
 
-type MakeId = () => string;
+export type MakeId = () => string;
 
 export const TEMPLATE_IDS = [
   "title", "title-content", "comparison", "image-text", "step-by-step", "summary",
@@ -27,26 +27,26 @@ export const para = (text: string, size: FontSize, options: Partial<Omit<Paragra
   return { font: "sans", ...rest, size, runs: [{ text, ...(color ? { color } : {}), ...(bold ? { bold } : {}) }] };
 };
 
-const text = (id: MakeId, x: number, y: number, w: number, h: number, paragraphs: Paragraph[], extra: Partial<TextElement> = {}): TextElement =>
+export const text = (id: MakeId, x: number, y: number, w: number, h: number, paragraphs: Paragraph[], extra: Partial<TextElement> = {}): TextElement =>
   ({ id: id(), type: "text", x, y, w, h, paragraphs, ...extra });
 
-const widget = (id: MakeId, x: number, y: number, w: number, h: number, kind: WidgetKind): SlideElement =>
+export const widget = (id: MakeId, x: number, y: number, w: number, h: number, kind: WidgetKind): SlideElement =>
   ({ id: id(), type: "widget", widget: kind, x, y, w, h });
 
 /** Brand line and footer shared by every template, matching the built-in deck. */
-const chrome = (id: MakeId, kicker: string): SlideElement[] => [
+export const chrome = (id: MakeId, kicker: string): SlideElement[] => [
   text(id, 64, 40, 700, 36, [para("4Seas · live training", 20, { font: "mono", color: "text-2" })]),
   text(id, 1136, 40, 400, 36, [para(kicker, 20, { font: "mono", color: "accent", align: "right" })]),
   { id: id(), type: "shape", shape: "line", x: 64, y: 832, w: 1472, h: 2, stroke: "border", strokeWidth: 1 },
   text(id, 64, 844, 900, 32, [para("4Seas Nimman · Chiang Mai", 16, { font: "mono", color: "text-2" })]),
 ];
 
-const heading = (id: MakeId, eyebrow: string, title: string): SlideElement[] => [
+export const heading = (id: MakeId, eyebrow: string, title: string): SlideElement[] => [
   text(id, 64, 104, 1472, 40, [para(`// ${eyebrow}`, 24, { font: "mono", color: "accent" })]),
   text(id, 64, 146, 1472, 84, [para(title, 60, { font: "mono", bold: true })]),
 ];
 
-const doc = (elements: SlideElement[], notes?: string): SlideDoc => ({ schema: 1, background: { token: "bg" }, elements, ...(notes ? { notes } : {}) });
+export const doc = (elements: SlideElement[], notes?: string): SlideDoc => ({ schema: 1, background: { token: "bg" }, elements, ...(notes ? { notes } : {}) });
 
 // ----------------------------------------------------------------- templates
 
@@ -236,7 +236,7 @@ export function week01Lesson(id: MakeId): Array<{ title: string; doc: SlideDoc }
 
 // ------------------------------------------------------------ skills segment
 
-const card = (id: MakeId, x: number, y: number, w: number, h: number, stroke: ColorToken, step?: number): SlideElement =>
+export const card = (id: MakeId, x: number, y: number, w: number, h: number, stroke: ColorToken, step?: number): SlideElement =>
   ({ id: id(), type: "shape", shape: "rounded", x, y, w, h, fill: "surface", stroke, strokeWidth: 2, ...(step ? { step } : {}) });
 
 /**

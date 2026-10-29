@@ -16,6 +16,7 @@ export default function Library({ language, onEdit }: { language: Language; onEd
   const [detail, setDetail] = useState<AdminLessonDetail | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState<{ afterSlideId?: string } | null>(null);
   const [preview, setPreview] = useState<number | null>(null);
@@ -38,6 +39,7 @@ export default function Library({ language, onEdit }: { language: Language; onEd
     if (busy) return;
     setBusy(true);
     setError("");
+    setNotice("");
     try { await work(); await loadLessons(); }
     catch (caught) {
       fail(caught);
@@ -51,6 +53,7 @@ export default function Library({ language, onEdit }: { language: Language; onEd
     if (!title) return;
     void run(async () => { const { lesson } = await adminApi.createLesson({ title }); setNewTitle(""); setSelected(lesson.id); setDetail(lesson); });
   };
+  const seedWeek02 = () => void run(async () => { const { lesson } = await adminApi.seedWeek02(); setSelected(lesson.id); setDetail(lesson); setNotice(t(language, "Week 02 imported. A draft plan with its challenge, cases and feedback wording is waiting in the Weekly Planner: review it, then publish.", "นำเข้าสัปดาห์ที่ 2 แล้ว มีแผนฉบับร่างพร้อมโจทย์ เคส และคำถามแบบสอบถามรออยู่ใน Weekly Planner ตรวจแล้วเผยแพร่ได้เลย")); });
   const seed = () => void run(async () => { const { lesson } = await adminApi.seedWeek01(); setSelected(lesson.id); setDetail(lesson); });
 
   const replaceSlide = (slide: AdminSlide) => setDetail((current) => current && { ...current, slides: current.slides.map((item) => (item.id === slide.id ? slide : item)) });
@@ -65,6 +68,7 @@ export default function Library({ language, onEdit }: { language: Language; onEd
       <div><h1>Lesson Library</h1><p>{t(language, "Reusable lessons and slides. Use the pencil to edit a slide in the Slide Builder.", "บทเรียนและสไลด์ที่ใช้ซ้ำได้ กดรูปดินสอเพื่อแก้ไขสไลด์ใน Slide Builder")}</p></div>
     </div>
     {error && <Notice>{error}</Notice>}
+    {notice && <Notice kind="success">{notice}</Notice>}
     <div className="library">
       <aside className="lesson-list">
         <form onSubmit={createLesson} className="button-row">
@@ -72,6 +76,7 @@ export default function Library({ language, onEdit }: { language: Language; onEd
           <button className="btn btn--accent" type="submit" disabled={busy || !newTitle.trim()} aria-label={t(language, "Create lesson", "สร้างบทเรียน")}><Plus size={15} /></button>
         </form>
         {(!lessons.some((lesson) => lesson.id === "week01-starter") || !lessons.some((lesson) => lesson.id === "week01-skills-starter")) && <button className="btn btn--ghost" disabled={busy} onClick={seed}><Download size={15} />{t(language, "Import Week 01 starter lessons", "นำเข้าบทเรียนสัปดาห์ที่ 1")}</button>}
+        {!lessons.some((lesson) => lesson.id === "week02-starter") && <button className="btn btn--ghost" disabled={busy} onClick={seedWeek02}><Download size={15} />{t(language, "Import Week 02 starter", "นำเข้าสัปดาห์ที่ 2")}</button>}
         {lessons.map((lesson) => <button key={lesson.id} className={`lesson-item${selected === lesson.id ? " is-on" : ""}${lesson.archived ? " is-archived" : ""}`} onClick={() => setSelected(lesson.id)}>
           <b>{lesson.title}</b>
           <small>{lesson.category || "—"} · {lesson.slideCount} {t(language, "slides", "สไลด์")}{lesson.archived ? " · archived" : ""}</small>

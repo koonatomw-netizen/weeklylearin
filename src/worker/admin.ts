@@ -1,6 +1,7 @@
 import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, detectImage } from "../shared/imageInfo";
 import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDoc";
 import { TEMPLATE_IDS, createFromTemplate, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
+import { WEEK02_CHALLENGE, WEEK02_FEEDBACK, WEEK02_NOTES, WEEK02_SITUATIONS, WEEK02_TITLE, week02Lesson } from "../shared/week02";
 import { HttpError, cleanLine, json, readBody } from "./http";
 import { handlePlans } from "./plans";
 import { randomSecret, sha256, type Env } from "./room-hub";
@@ -10,6 +11,8 @@ import { randomSecret, sha256, type Env } from "./room-hub";
 const SESSION_HOURS = 12;
 const STARTER_LESSON_ID = "week01-starter";
 const STARTER_SKILLS_LESSON_ID = "week01-skills-starter";
+const WEEK02_LESSON_ID = "week02-starter";
+const WEEK02_PLAN_ID = "week02-starter-plan";
 
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -252,6 +255,27 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
       audit("lesson.seed_week01", { slides: slides.length }),
     ]);
     return json({ lesson: await getLesson(env, STARTER_LESSON_ID), created: true }, 201);
+  }
+
+  if (path === "/seed/week02" && method === "POST") {
+    // Week 02 starter: the lesson's slides plus a draft plan (challenge, cases and feedback wording) ready to publish.
+    if (await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(WEEK02_LESSON_ID).first()) {
+      return json({ lesson: await getLesson(env, WEEK02_LESSON_ID), planId: WEEK02_PLAN_ID, created: false });
+    }
+    const now = new Date().toISOString();
+    const slides = week02Lesson(newElementId).map((slide) => ({ ...slide, id: crypto.randomUUID() }));
+    await db.batch([
+      db.prepare("INSERT INTO lessons (id, title, category, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(WEEK02_LESSON_ID, WEEK02_TITLE, "Everyday AI", "Hand AI real work: your own material, structured results, saved prompts, and a task audit. Practice data only.", now, now),
+      ...slides.map((slide, index) => db.prepare("INSERT INTO slides (id, lesson_id, position, title, doc_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+        .bind(slide.id, WEEK02_LESSON_ID, index, slide.title, JSON.stringify(slide.doc), now, now)),
+      db.prepare(`INSERT OR IGNORE INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, situations_json, feedback_json, status, created_at, updated_at)
+        VALUES (?, ?, NULL, 50, ?, ?, ?, ?, 'draft', ?, ?)`)
+        .bind(WEEK02_PLAN_ID, WEEK02_TITLE, WEEK02_NOTES, JSON.stringify(WEEK02_CHALLENGE), JSON.stringify(WEEK02_SITUATIONS), JSON.stringify(WEEK02_FEEDBACK), now, now),
+      ...slides.map((slide, index) => db.prepare("INSERT OR IGNORE INTO training_plan_slides (plan_id, slide_id, position) VALUES (?, ?, ?)").bind(WEEK02_PLAN_ID, slide.id, index)),
+      audit("lesson.seed_week02", { slides: slides.length }),
+    ]);
+    return json({ lesson: await getLesson(env, WEEK02_LESSON_ID), planId: WEEK02_PLAN_ID, created: true }, 201);
   }
 
   const lessonMatch = path.match(/^\/lessons\/([A-Za-z0-9-]{1,64})(\/slides|\/reorder)?$/);

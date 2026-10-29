@@ -74,6 +74,7 @@ export const adminApi = {
   createLesson: (data: { title: string; category?: string }) => call<{ lesson: AdminLessonDetail }>("/lessons", send("POST", data)),
   updateLesson: (id: string, data: Partial<{ title: string; category: string; description: string; archived: boolean }>) =>
     call<{ lesson: AdminLessonDetail }>(`/lessons/${id}`, send("PATCH", data)),
+  seedWeek02: () => call<{ lesson: AdminLessonDetail; planId: string; created: boolean }>("/seed/week02", send("POST")),
   seedWeek01: () => call<{ lesson: AdminLessonDetail; created: boolean }>("/seed/week01", send("POST")),
   addSlide: (lessonId: string, data: { template?: TemplateId; duplicateOf?: string; afterSlideId?: string; title?: string }) =>
     call<{ slide: AdminSlide }>(`/lessons/${lessonId}/slides`, send("POST", data)),

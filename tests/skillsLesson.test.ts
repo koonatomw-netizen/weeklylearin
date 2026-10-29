@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { SLIDE_STEPS, SLIDE_TITLES, TOTAL_SLIDES } from "../src/shared/challenge";
 import { LEGACY_META } from "../src/shared/deck";
 import { CANVAS_H, CANVAS_W, slidePlainText, stepCount, validateSlideDoc } from "../src/shared/slideDoc";
+import { validateChallenge, validateFeedbackQuestions, validateSituations } from "../src/shared/deck";
 import { skillsLesson, week01Lesson } from "../src/shared/templates";
+import { WEEK02_CHALLENGE, WEEK02_FEEDBACK, WEEK02_SITUATIONS, week02Lesson } from "../src/shared/week02";
 
 let n = 0;
 const id = () => `k${++n}`;
@@ -76,5 +78,37 @@ describe("skills slides in the decks", () => {
     expect(SLIDE_TITLES[7]).toBe("Skills: Write It Once");
     expect(LEGACY_META.steps).toEqual(SLIDE_STEPS);
     expect(LEGACY_META.widgetSlides).toEqual({ join: 4, "live-stats": 4, challenge: 4, battle: 5, leaderboard: 6 });
+  });
+});
+
+describe("week02Lesson", () => {
+  const slides = week02Lesson(id);
+
+  it("has the thirteen Week 02 slides with the live ones in the right order", () => {
+    expect(slides).toHaveLength(13);
+    const liveKinds = slides.map((slide) => slide.doc.elements.filter((element) => element.type === "widget").map((element) => element.type === "widget" ? element.widget : ""));
+    expect(liveKinds[9]).toEqual(["challenge", "live-stats", "join"]);
+    expect(liveKinds[10]).toEqual(["battle"]);
+    expect(liveKinds[11]).toEqual(["leaderboard"]);
+    expect(liveKinds.filter((kinds) => kinds.length).length).toBe(3);
+  });
+
+  it("produces valid slide documents that fit the canvas and carry Thai alongside English", () => {
+    for (const slide of slides) {
+      expect(validateSlideDoc(slide.doc).ok, slide.title).toBe(true);
+      for (const element of slide.doc.elements) {
+        expect(element.x + element.w, `${slide.title} width`).toBeLessThanOrEqual(CANVAS_W);
+        expect(element.y + element.h, `${slide.title} height`).toBeLessThanOrEqual(CANVAS_H);
+      }
+      if (slide.doc.elements.some((element) => element.type === "widget")) continue;
+      expect(THAI.test(slidePlainText(slide.doc)), `${slide.title} has Thai`).toBe(true);
+    }
+  });
+
+  it("ships a valid challenge, case pool and feedback wording", () => {
+    expect(validateChallenge(WEEK02_CHALLENGE).ok).toBe(true);
+    const cases = validateSituations(WEEK02_SITUATIONS);
+    expect(cases.ok && cases.situations?.length).toBe(6);
+    expect(validateFeedbackQuestions(WEEK02_FEEDBACK).ok).toBe(true);
   });
 });

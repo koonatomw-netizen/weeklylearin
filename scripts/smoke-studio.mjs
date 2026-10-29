@@ -211,6 +211,20 @@ check((await request(`/api/rooms/${offRoom.roomCode}/state`, { token: offRoom.ho
 await request(`/api/rooms/${offRoom.roomCode}/control`, { method: 'POST', token: offRoom.hostToken, data: { action: 'open_case' }, expected: 409 });
 log('content in the studio: Skills lesson import, per-plan cases and feedback wording, rooms started from the home page');
 
+// -------------------------------------------------- Week 02 starter plan
+const week02 = await request('/api/admin/seed/week02', { method: 'POST', token: admin, expected: [200, 201] });
+check(week02.lesson.slides.length === 13 && week02.planId === 'week02-starter-plan', 'Week 02 starter imports as a 13-slide lesson plus a draft plan.');
+const again = await request('/api/admin/seed/week02', { method: 'POST', token: admin, expected: 200 });
+check(again.created === false, 'Importing Week 02 twice is a no-op.');
+const week02Plan = (await request('/api/admin/plans/week02-starter-plan', { token: admin })).plan;
+check(week02Plan.slides.length === 13 && week02Plan.situations.length === 6 && week02Plan.challenge.titleEn === 'Messy Notes to Action List', 'The draft plan has its slides, six cases and challenge.');
+check(week02Plan.feedbackQuestions.workChallenges.en.includes('chore'), 'The draft plan has its own feedback wording.');
+const week02Pub = await request('/api/admin/plans/week02-starter-plan/publish', { method: 'POST', token: admin, expected: 201 });
+const week02Room = await request(`/api/admin/snapshots/${week02Pub.snapshot.id}/session`, { method: 'POST', token: admin, expected: 201 });
+const week02State = (await request(`/api/rooms/${week02Room.roomCode}/state`, { token: week02Room.hostToken })).state;
+check(week02State.totalSlides === 13 && week02State.casePool.length === 6 && week02State.title.startsWith('Week 02'), 'A room from the Week 02 starter presents 13 slides with its own case pool.');
+log('Week 02 starter: lesson, draft plan, publish and a live room');
+
 // ------------------------------------------------------- legacy rooms
 const legacy = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { builtIn: true }, expected: 201 });
 const legacyState = (await request(`/api/rooms/${legacy.roomCode}/state`, { token: legacy.hostToken })).state;
