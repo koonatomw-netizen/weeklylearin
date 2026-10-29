@@ -71,7 +71,7 @@ export default function Library({ language, onEdit }: { language: Language; onEd
           <input className="input" value={newTitle} maxLength={120} onChange={(event) => setNewTitle(event.target.value)} placeholder={t(language, "New lesson title", "ชื่อบทเรียนใหม่")} aria-label={t(language, "New lesson title", "ชื่อบทเรียนใหม่")} style={{ flex: 1, minWidth: 0 }} />
           <button className="btn btn--accent" type="submit" disabled={busy || !newTitle.trim()} aria-label={t(language, "Create lesson", "สร้างบทเรียน")}><Plus size={15} /></button>
         </form>
-        {!lessons.some((lesson) => lesson.id === "week01-starter") && <button className="btn btn--ghost" disabled={busy} onClick={seed}><Download size={15} />{t(language, "Import Week 01 starter lesson", "นำเข้าบทเรียนสัปดาห์ที่ 1")}</button>}
+        {(!lessons.some((lesson) => lesson.id === "week01-starter") || !lessons.some((lesson) => lesson.id === "week01-skills-starter")) && <button className="btn btn--ghost" disabled={busy} onClick={seed}><Download size={15} />{t(language, "Import Week 01 starter lessons", "นำเข้าบทเรียนสัปดาห์ที่ 1")}</button>}
         {lessons.map((lesson) => <button key={lesson.id} className={`lesson-item${selected === lesson.id ? " is-on" : ""}${lesson.archived ? " is-archived" : ""}`} onClick={() => setSelected(lesson.id)}>
           <b>{lesson.title}</b>
           <small>{lesson.category || "—"} · {lesson.slideCount} {t(language, "slides", "สไลด์")}{lesson.archived ? " · archived" : ""}</small>

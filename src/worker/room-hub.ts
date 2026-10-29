@@ -1,7 +1,7 @@
 import { formGroups, shuffle, topEntryIds } from "../shared/battle";
 import { LEGACY_META, deckMeta, type DeckMeta, type PublishedDeck } from "../shared/deck";
 import type { WidgetKind } from "../shared/slideDoc";
-import { pickSituation } from "../shared/situations";
+import { SITUATIONS, pickSituation } from "../shared/situations";
 import {
   FEEDBACK_TEXT_MAX, MAX_ATTEMPTS, MAX_PARTICIPANTS, PROMPT_MAX, PROMPT_MIN,
   type ChecklistKey, type ControlAction, type FeedbackResponse, type Role,
@@ -425,7 +425,7 @@ export class RoomHub {
       case "open_case": {
         const blocked = caseBlockReason(s);
         if (blocked) throw new HttpError(409, blocked);
-        const pick = pickSituation(secureRandom, room.case_situation_id ?? undefined);
+        const pick = pickSituation(secureRandom, room.case_situation_id ?? undefined, s.meta.situations ?? SITUATIONS);
         await db.batch([
           setRoom("case_situation_id = ?, case_roll = case_roll + 1", pick.id),
           this.logAction("open_case", { situation: pick.id, rarity: pick.rarity }),

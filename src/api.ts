@@ -27,8 +27,14 @@ export const newRequestId = () => crypto.randomUUID();
 
 export const getConfig = () => jsonRequest<{ hostReady: boolean }>("/api/config");
 
-export const createRoom = (passphrase: string) =>
-  jsonRequest<{ roomCode: string; hostToken: string; title: string }>("/api/rooms", { method: "POST", headers: { "X-Host-Passphrase": passphrase }, body: "{}" });
+export interface PresenterPlan { planId: string; title: string; weekDate: string | null; snapshotId: string; version: number }
+
+/** Published plans a presenter can start a room from (the passphrase is checked here too). */
+export const getPresenterPlans = (passphrase: string) =>
+  jsonRequest<{ plans: PresenterPlan[] }>("/api/presenter/plans", { method: "POST", headers: { "X-Host-Passphrase": passphrase }, body: "{}" });
+
+export const createRoom = (passphrase: string, snapshotId: string) =>
+  jsonRequest<{ roomCode: string; hostToken: string; title: string }>("/api/rooms", { method: "POST", headers: { "X-Host-Passphrase": passphrase }, body: JSON.stringify({ snapshotId }) });
 
 export const joinRoom = (code: string, nickname: string) =>
   jsonRequest<{ participantId: string; participantToken: string; nickname: string }>(room(code, "join"), { method: "POST", body: JSON.stringify({ nickname }) });

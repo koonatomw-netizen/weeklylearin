@@ -1,5 +1,6 @@
 import { SESSION_TITLE } from "../shared/challenge";
 import { handleAdmin, serveAsset } from "./admin";
+import { latestPublishedPlans, startRoomFromSnapshot } from "./plans";
 import { RoomHub, makeRoomCode, randomSecret, sha256, type Env } from "./room-hub";
 
 function json(data: unknown, status = 200): Response {
@@ -27,6 +28,16 @@ function allowCreate(ip: string): boolean {
   return bucket.count <= 10;
 }
 
+/** Presenter passphrase check shared by the room endpoints. Returns an error response, or null when the caller may continue. */
+function checkPresenter(request: Request, env: Env): Response | null {
+  if (!env.HOST_PASSPHRASE) {
+    return json({ error: "Presenter rooms are locked. Set the HOST_PASSPHRASE secret before the session." }, 503);
+  }
+  if (!allowCreate(request.headers.get("CF-Connecting-IP") ?? "local")) return json({ error: "Too many attempts. Wait a minute and try again." }, 429);
+  if (!secureEqual(request.headers.get("X-Host-Passphrase") ?? "", env.HOST_PASSPHRASE)) return json({ error: "That presenter passphrase is not correct." }, 401);
+  return null;
+}
+
 async function createRoom(request: Request, env: Env): Promise<Response> {
   if (!env.HOST_PASSPHRASE) {
     return json({ error: "Presenter rooms are locked. Set the HOST_PASSPHRASE secret before the session." }, 503);
@@ -34,6 +45,15 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
   if (!allowCreate(request.headers.get("CF-Connecting-IP") ?? "local")) return json({ error: "Too many attempts. Wait a minute and try again." }, 429);
   const passphrase = request.headers.get("X-Host-Passphrase") ?? "";
   if (!secureEqual(passphrase, env.HOST_PASSPHRASE)) return json({ error: "That presenter passphrase is not correct." }, 401);
+  const body = await request.json().catch(() => ({})) as { snapshotId?: unknown; builtIn?: unknown };
+  // New rooms present a published plan, so every slide, case and question stays editable in the studio.
+  if (typeof body.snapshotId === "string") {
+    const snapshot = await env.DB.prepare("SELECT id, deck_json FROM training_snapshots WHERE id = ?").bind(body.snapshotId).first<{ id: string; deck_json: string }>();
+    if (!snapshot) return json({ error: "That published plan was not found." }, 404);
+    return json(await startRoomFromSnapshot(env, snapshot), 201);
+  }
+  // The built-in deck is only kept for tests and emergencies; the home page never offers it.
+  if (body.builtIn !== true) return json({ error: "Choose a published plan to start from. Publish one in the Training Studio first." }, 400);
   let roomCode = "";
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const candidate = makeRoomCode();
@@ -59,6 +79,10 @@ async function fetchHandler(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/api/config" && request.method === "GET") return json({ hostReady: Boolean(env.HOST_PASSPHRASE) });
   if (url.pathname === "/api/rooms" && request.method === "POST") return createRoom(request, env);
+  if (url.pathname === "/api/presenter/plans" && request.method === "POST") {
+    const refused = checkPresenter(request, env);
+    return refused ?? json({ plans: await latestPublishedPlans(env) });
+  }
   if (url.pathname.startsWith("/api/admin/")) return handleAdmin(request, env, url);
   const assetMatch = url.pathname.match(/^\/api\/assets\/([^/]+)$/);
   if (assetMatch && (request.method === "GET" || request.method === "HEAD")) return serveAsset(env, assetMatch[1]);

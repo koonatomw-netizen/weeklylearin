@@ -1,4 +1,4 @@
-import { DEFAULT_CHALLENGE, validateChallenge, type Challenge, type PublishedDeck } from "../shared/deck";
+import { DEFAULT_CHALLENGE, validateChallenge, validateFeedbackQuestions, validateSituations, type Challenge, type PublishedDeck } from "../shared/deck";
 import { stepCount, validateSlideDoc, type SlideDoc } from "../shared/slideDoc";
 import { HttpError, cleanBlock, cleanLine, json, readBody } from "./http";
 import { makeRoomCode, randomSecret, sha256, type Env } from "./room-hub";
@@ -14,6 +14,7 @@ type Audit = (action: string, detail?: Record<string, unknown>) => D1PreparedSta
 interface PlanRow {
   id: string; title: string; week_date: string | null; duration_min: number | null; notes: string; challenge_json: string;
   status: "draft" | "published"; copied_from: string | null; created_at: string; updated_at: string;
+  situations_json?: string | null; feedback_json?: string | null;
   slide_count?: number; latest_version?: number | null; latest_snapshot_id?: string | null; published_at?: string | null; stale?: number;
 }
 
@@ -40,9 +41,16 @@ const PLAN_SELECT = `SELECT p.*,
        ELSE 0 END AS stale
   FROM training_plans p`;
 
+function parseStored<T>(value: string | null | undefined, validate: (input: unknown) => T | null): T | null {
+  if (!value) return null;
+  try { return validate(JSON.parse(value)); } catch { return null; }
+}
+const parseSituations = (value: string | null | undefined) => parseStored(value, (input) => { const r = validateSituations(input); return r.ok ? r.situations : null; });
+const parseFeedback = (value: string | null | undefined) => parseStored(value, (input) => { const r = validateFeedbackQuestions(input); return r.ok ? r.questions : null; });
+
 const planView = (row: PlanRow) => ({
   id: row.id, title: row.title, weekDate: row.week_date, durationMin: row.duration_min, notes: row.notes,
-  challenge: parseChallenge(row.challenge_json), status: row.status, copiedFrom: row.copied_from,
+  challenge: parseChallenge(row.challenge_json), situations: parseSituations(row.situations_json), feedbackQuestions: parseFeedback(row.feedback_json), status: row.status, copiedFrom: row.copied_from,
   createdAt: row.created_at, updatedAt: row.updated_at, slideCount: row.slide_count ?? 0,
   latestVersion: row.latest_version ?? null, latestSnapshotId: row.latest_snapshot_id ?? null, publishedAt: row.published_at ?? null, hasUnpublishedChanges: Boolean(row.stale),
 });
@@ -83,6 +91,36 @@ async function planDetail(env: Env, id: string) {
   };
 }
 
+/** Create a live room that presents exactly one frozen published version. `extra` statements (such as an audit row) run in the same batch. */
+export async function startRoomFromSnapshot(env: Env, snapshot: { id: string; deck_json: string }, extra: (roomCode: string, deck: PublishedDeck) => D1PreparedStatement[] = () => []) {
+  const deck = JSON.parse(snapshot.deck_json) as PublishedDeck;
+  let roomCode = "";
+  for (let attempt = 0; attempt < 8 && !roomCode; attempt += 1) {
+    const candidate = makeRoomCode();
+    if (!(await env.DB.prepare("SELECT code FROM rooms WHERE code = ?").bind(candidate).first())) roomCode = candidate;
+  }
+  if (!roomCode) throw new HttpError(503, "Could not allocate a room code. Please try again.");
+  const hostToken = randomSecret();
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO rooms
+      (code, title, host_token_hash, created_at, template_id, template_version, slides_snapshot, current_slide, phase, scoring_mode, scoring_model, activity, slide_step, snapshot_id)
+      VALUES (?, ?, ?, ?, 'training-studio', ?, '[]', 0, 'join', 'none', '', 'waiting', 0, ?)`)
+      .bind(roomCode, deck.title.slice(0, 120), await sha256(hostToken), new Date().toISOString(), deck.version, snapshot.id),
+    ...extra(roomCode, deck),
+  ]);
+  return { roomCode, hostToken, title: deck.title };
+}
+
+/** The newest published version of every plan, newest week first: what a presenter can start a room from. */
+export async function latestPublishedPlans(env: Env) {
+  const rows = await env.DB.prepare(`SELECT p.id AS plan_id, p.title, p.week_date, t.id AS snapshot_id, t.version
+    FROM training_plans p JOIN training_snapshots t ON t.plan_id = p.id
+    WHERE t.version = (SELECT MAX(version) FROM training_snapshots x WHERE x.plan_id = p.id)
+    ORDER BY COALESCE(p.week_date, '0000') DESC, p.title LIMIT 100`)
+    .all<{ plan_id: string; title: string; week_date: string | null; snapshot_id: string; version: number }>();
+  return rows.results.map((row) => ({ planId: row.plan_id, title: row.title, weekDate: row.week_date, snapshotId: row.snapshot_id, version: row.version }));
+}
+
 export async function handlePlans(path: string, method: string, request: Request, env: Env, audit: Audit): Promise<Response | null> {
   const db = env.DB;
 
@@ -100,9 +138,9 @@ export async function handlePlans(path: string, method: string, request: Request
       const source = await db.prepare("SELECT * FROM training_plans WHERE id = ?").bind(body.copyFrom).first<PlanRow>();
       if (!source) throw new HttpError(404, "The plan to copy was not found.");
       await db.batch([
-        db.prepare(`INSERT INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, status, copied_from, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`)
-          .bind(id, `${source.title} (copy)`.slice(0, 120), source.week_date ? addDays(source.week_date, 7) : null, source.duration_min, source.notes, source.challenge_json, source.id, now, now),
+        db.prepare(`INSERT INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, situations_json, feedback_json, status, copied_from, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`)
+          .bind(id, `${source.title} (copy)`.slice(0, 120), source.week_date ? addDays(source.week_date, 7) : null, source.duration_min, source.notes, source.challenge_json, source.situations_json ?? null, source.feedback_json ?? null, source.id, now, now),
         db.prepare("INSERT INTO training_plan_slides (plan_id, slide_id, position) SELECT ?, slide_id, position FROM training_plan_slides WHERE plan_id = ?").bind(id, source.id),
         audit("plan.duplicate", { planId: id, from: source.id }),
       ]);
@@ -138,6 +176,18 @@ export async function handlePlans(path: string, method: string, request: Request
         if (!result.ok) throw new HttpError(400, result.error);
         challengeJson = JSON.stringify(result.challenge);
       }
+      let situationsJson = plan.situations_json ?? null;
+      if (body.situations !== undefined) {
+        const result = validateSituations(body.situations);
+        if (!result.ok) throw new HttpError(400, result.error);
+        situationsJson = result.situations === null ? null : JSON.stringify(result.situations);
+      }
+      let feedbackJson = plan.feedback_json ?? null;
+      if (body.feedbackQuestions !== undefined) {
+        const result = validateFeedbackQuestions(body.feedbackQuestions);
+        if (!result.ok) throw new HttpError(400, result.error);
+        feedbackJson = result.questions === null ? null : JSON.stringify(result.questions);
+      }
       const statements: D1PreparedStatement[] = [];
       if (body.slideIds !== undefined) {
         if (!Array.isArray(body.slideIds) || body.slideIds.length > MAX_PLAN_SLIDES) throw new HttpError(400, `A plan can hold at most ${MAX_PLAN_SLIDES} slides.`);
@@ -151,8 +201,8 @@ export async function handlePlans(path: string, method: string, request: Request
         ids.forEach((slideId, position) => statements.push(db.prepare("INSERT INTO training_plan_slides (plan_id, slide_id, position) VALUES (?, ?, ?)").bind(planId, slideId, position)));
       }
       statements.push(
-        db.prepare("UPDATE training_plans SET title = ?, week_date = ?, duration_min = ?, notes = ?, challenge_json = ?, updated_at = ? WHERE id = ?")
-          .bind(title, weekDate, duration, notes, challengeJson, new Date().toISOString(), planId),
+        db.prepare("UPDATE training_plans SET title = ?, week_date = ?, duration_min = ?, notes = ?, challenge_json = ?, situations_json = ?, feedback_json = ?, updated_at = ? WHERE id = ?")
+          .bind(title, weekDate, duration, notes, challengeJson, situationsJson, feedbackJson, new Date().toISOString(), planId),
         audit("plan.update", { planId, slides: body.slideIds !== undefined }),
       );
       await db.batch(statements);
@@ -180,6 +230,8 @@ export async function handlePlans(path: string, method: string, request: Request
       const deck: PublishedDeck = {
         schema: 1, planId, version, title: detail.title, weekDate: detail.weekDate, durationMin: detail.durationMin,
         notes: detail.notes, challenge: detail.challenge, slides,
+        ...(detail.situations ? { situations: detail.situations } : {}),
+        ...(detail.feedbackQuestions ? { feedbackQuestions: detail.feedbackQuestions } : {}),
       };
       const deckJson = JSON.stringify(deck);
       if (deckJson.length > MAX_DECK_BYTES) throw new HttpError(413, "This plan is too large to publish. Split it into two sessions.");
@@ -205,22 +257,8 @@ export async function handlePlans(path: string, method: string, request: Request
     if (!snapshotMatch[2] && method === "GET") return json({ snapshot: { id: row.id, publishedAt: row.published_at, deck: JSON.parse(row.deck_json) as PublishedDeck } });
     if (snapshotMatch[2] === "/session" && method === "POST") {
       // Start a live room that presents exactly this frozen version.
-      const deck = JSON.parse(row.deck_json) as PublishedDeck;
-      let roomCode = "";
-      for (let attempt = 0; attempt < 8 && !roomCode; attempt += 1) {
-        const candidate = makeRoomCode();
-        if (!(await db.prepare("SELECT code FROM rooms WHERE code = ?").bind(candidate).first())) roomCode = candidate;
-      }
-      if (!roomCode) throw new HttpError(503, "Could not allocate a room code. Please try again.");
-      const hostToken = randomSecret();
-      await db.batch([
-        db.prepare(`INSERT INTO rooms
-          (code, title, host_token_hash, created_at, template_id, template_version, slides_snapshot, current_slide, phase, scoring_mode, scoring_model, activity, slide_step, snapshot_id)
-          VALUES (?, ?, ?, ?, 'training-studio', ?, '[]', 0, 'join', 'none', '', 'waiting', 0, ?)`)
-          .bind(roomCode, deck.title.slice(0, 120), await sha256(hostToken), new Date().toISOString(), deck.version, row.id),
-        audit("session.start", { roomCode, snapshotId: row.id, planId: deck.planId, version: deck.version }),
-      ]);
-      return json({ roomCode, hostToken, title: deck.title }, 201);
+      const started = await startRoomFromSnapshot(env, row, (roomCode, deck) => [audit("session.start", { roomCode, snapshotId: row.id, planId: deck.planId, version: deck.version })]);
+      return json(started, 201);
     }
   }
 

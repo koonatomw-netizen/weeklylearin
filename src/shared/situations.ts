@@ -91,15 +91,15 @@ export const SITUATIONS: readonly Situation[] = [
     "เขียนพรอมป์สั่งให้ AI เขียนข้อความสองฉบับ ฉบับละกลุ่ม ข้อเท็จจริงเหมือนกันแต่น้ำเสียงต่างกัน"),
 ];
 
-export function situationById(id: string | null | undefined): Situation | undefined {
-  return id ? SITUATIONS.find((item) => item.id === id) : undefined;
+export function situationById(id: string | null | undefined, pool: readonly Situation[] = SITUATIONS): Situation | undefined {
+  return id ? pool.find((item) => item.id === id) : undefined;
 }
 
 /**
  * Weighted draw: the first random number picks the rarity, the second picks within it.
  * `excludeId` (the situation currently shown) is never returned, so a re-roll always changes it.
  */
-export function pickSituation(random: () => number, excludeId?: string): Situation {
+export function pickSituation(random: () => number, excludeId?: string, source: readonly Situation[] = SITUATIONS): Situation {
   const total = RARITY_ORDER.reduce((sum, rarity) => sum + RARITY_WEIGHTS[rarity], 0);
   const roll = random() * total;
   let start = 0;
@@ -111,8 +111,8 @@ export function pickSituation(random: () => number, excludeId?: string): Situati
   }
   for (let offset = 0; offset < RARITY_ORDER.length; offset += 1) {
     const rarity = RARITY_ORDER[(start + offset) % RARITY_ORDER.length];
-    const pool = SITUATIONS.filter((item) => item.rarity === rarity && item.id !== excludeId);
+    const pool = source.filter((item) => item.rarity === rarity && item.id !== excludeId);
     if (pool.length) return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
   }
-  return SITUATIONS[0];
+  return source[0] ?? SITUATIONS[0];
 }

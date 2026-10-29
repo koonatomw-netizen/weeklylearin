@@ -59,7 +59,7 @@ function ParticipantStage({ state, me, code, token, language, setRoom }: {
     case "writing_closed": return <Writing state={state} me={me} code={code} token={token} language={language} setRoom={setRoom} open={false} />;
     case "battle": return <Battle state={state} code={code} token={token} language={language} setRoom={setRoom} />;
     case "results": return <Results state={state} me={me} language={language} />;
-    case "feedback": return <WeeklyFeedback me={me} code={code} token={token} language={language} setRoom={setRoom} />;
+    case "feedback": return <WeeklyFeedback me={me} code={code} token={token} language={language} setRoom={setRoom} questions={state.feedbackQuestions} />;
   }
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CHALLENGE, LEGACY_META, deckMeta, validateChallenge, type PublishedDeck } from "../src/shared/deck";
+import { DEFAULT_CHALLENGE, DEFAULT_FEEDBACK_QUESTIONS, LEGACY_META, deckMeta, validateChallenge, validateFeedbackQuestions, validateSituations, type PublishedDeck } from "../src/shared/deck";
+import { pickSituation } from "../src/shared/situations";
 import { createFromTemplate } from "../src/shared/templates";
 
 let n = 0;
@@ -34,5 +35,47 @@ describe("validateChallenge", () => {
       taskEn: "Write a prompt.", taskTh: "Write a prompt.",
     });
     expect(validateChallenge({ ...DEFAULT_CHALLENGE, taskEn: "x".repeat(601) }).ok).toBe(false);
+  });
+});
+
+describe("validateSituations", () => {
+  const challenge = { titleEn: "Slow report", titleTh: "", scenarioEn: "A weekly report takes two hours.", scenarioTh: "", taskEn: "Write a prompt that drafts it from notes.", taskTh: "" };
+
+  it("treats null as the built-in pool and [] as case opening off", () => {
+    expect(validateSituations(null)).toEqual({ ok: true, situations: null });
+    expect(validateSituations([])).toEqual({ ok: true, situations: [] });
+  });
+
+  it("validates each case, fills Thai from English and makes unique ids", () => {
+    const result = validateSituations([{ rarity: "common", challenge }, { id: "case-1", rarity: "rare", challenge }]);
+    expect(result.ok && result.situations?.map((item) => item.id)).toEqual(["case-1", "case-2"]);
+    expect(result.ok && result.situations?.[0].challenge.titleTh).toBe("Slow report");
+  });
+
+  it("rejects a bad rarity, a missing English field and too many cases", () => {
+    expect(validateSituations([{ rarity: "mythic", challenge }]).ok).toBe(false);
+    expect(validateSituations([{ rarity: "common", challenge: { ...challenge, taskEn: "" } }]).ok).toBe(false);
+    expect(validateSituations(Array.from({ length: 31 }, () => ({ rarity: "common", challenge }))).ok).toBe(false);
+  });
+
+  it("draws only from the plan's own pool", () => {
+    const result = validateSituations([{ rarity: "common", challenge }, { rarity: "rare", challenge: { ...challenge, titleEn: "Other" } }]);
+    if (!result.ok || !result.situations) throw new Error("expected a pool");
+    for (let run = 0; run < 20; run += 1) {
+      expect(result.situations.map((item) => item.id)).toContain(pickSituation(Math.random, undefined, result.situations).id);
+    }
+  });
+});
+
+describe("validateFeedbackQuestions", () => {
+  it("uses the defaults when unset and requires English wording", () => {
+    expect(validateFeedbackQuestions(undefined)).toEqual({ ok: true, questions: null });
+    expect(validateFeedbackQuestions({ ...DEFAULT_FEEDBACK_QUESTIONS, supportNeeded: { en: " ", th: "x" } }).ok).toBe(false);
+  });
+
+  it("falls back to English for Thai and caps the length", () => {
+    const result = validateFeedbackQuestions({ ...DEFAULT_FEEDBACK_QUESTIONS, workChallenges: { en: "Which task took longest?", th: "" } });
+    expect(result.ok && result.questions?.workChallenges.th).toBe("Which task took longest?");
+    expect(validateFeedbackQuestions({ ...DEFAULT_FEEDBACK_QUESTIONS, otherComments: { en: "x".repeat(161), th: "" } }).ok).toBe(false);
   });
 });

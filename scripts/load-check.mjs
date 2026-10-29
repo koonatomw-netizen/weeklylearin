@@ -21,7 +21,7 @@ async function request(path, { method = 'GET', token, data, headers = {}, expect
   assert.equal(response.status, expected, `${method} ${path}: ${response.status} ${JSON.stringify(body)}`);
   return body;
 }
-const started = await timed('create room', () => request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': passphrase }, data: {}, expected: 201 }));
+const started = await timed('create room', () => request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': passphrase }, data: { builtIn: true }, expected: 201 }));
 const { roomCode, hostToken } = started.value;
 assert.ok(roomCode && hostToken, 'Room creation returns host credentials.');
 const joinTimes = [];

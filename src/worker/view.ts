@@ -1,5 +1,5 @@
 import { battleScore, buildLeaderboard, rankByVotes } from "../shared/battle";
-import type { DeckMeta } from "../shared/deck";
+import { DEFAULT_FEEDBACK_QUESTIONS, type DeckMeta } from "../shared/deck";
 import { situationById } from "../shared/situations";
 import type {
   Activity, BattleRound, BattleStatus, BattleView, Checklist, FeedbackSummary, FinalStatus, HostState,
@@ -48,6 +48,7 @@ export interface Snapshot {
 
 /** Why a case cannot be (re)opened right now, or null when it can. Opening one replaces the challenge, so it must not strand written prompts. */
 export function caseBlockReason(s: Snapshot): string | null {
+  if (s.meta.situations && s.meta.situations.length === 0) return "Case opening is turned off for this session.";
   if (s.battles.length > 0) return "Battles have started, so a new case can no longer be opened.";
   if (s.submissions.length > 0) return "Prompts have already been submitted, so a new case can no longer be opened.";
   return null;
@@ -182,7 +183,7 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
   const submittedIds = new Set(s.submissions.map((submission) => submission.participant_id));
   const total = Math.max(1, s.meta.steps.length);
   const slide = Math.min(Math.max(0, s.room.current_slide), total - 1);
-  const drawn = situationById(s.room.case_situation_id);
+  const drawn = situationById(s.room.case_situation_id, s.meta.situations ?? undefined);
   const state: SessionState = {
     code: s.room.code,
     title: s.meta.title,
@@ -193,6 +194,8 @@ export function buildEnvelope(s: Snapshot, role: Role, participantId?: string): 
     totalSlides: total,
     slideSteps: s.meta.steps,
     challenge: drawn?.challenge ?? s.meta.challenge,
+    casePool: s.meta.situations ? s.meta.situations.map((item) => ({ id: item.id, rarity: item.rarity, titleEn: item.challenge.titleEn, titleTh: item.challenge.titleTh })) : null,
+    feedbackQuestions: s.meta.feedbackQuestions ?? DEFAULT_FEEDBACK_QUESTIONS,
     caseRoll: drawn ? { situationId: drawn.id, roll: s.room.case_roll, rarity: drawn.rarity } : null,
     currentSlide: slide,
     slideStep: Math.min(Math.max(0, s.room.slide_step), s.meta.steps[slide] ?? 0),

@@ -175,8 +175,44 @@ const pushed = (await request('/api/admin/sessions', { token: admin })).sessions
 check(pushed.version === 2, 'Live Sessions shows the room on v2.');
 log('push to live room: admin-only, same plan and newer version only, slide kept, state intact');
 
+// ------------------------------------- content that used to be fixed in code
+const lessonsAfterSeed = (await request('/api/admin/lessons', { token: admin })).lessons;
+const skillsLesson = lessonsAfterSeed.find((item) => item.title === 'Week 01 · Part 2: Skills');
+check(skillsLesson && skillsLesson.slideCount === 6, 'The Skills segment is importable as its own editable lesson.');
+
+const caseA = { rarity: 'common', challenge: { titleEn: 'Slow report', scenarioEn: 'The weekly report takes two hours.', taskEn: 'Write a prompt that drafts it from notes.' } };
+const caseB = { rarity: 'rare', challenge: { titleEn: 'Inbox flood', scenarioEn: '80 unread emails after a holiday.', taskEn: 'Write a prompt that sorts them by urgency.' } };
+const feedbackWording = { trainingRating: { en: 'How useful was this automation session?' }, workChallenges: { en: 'Which chore takes you longest each week?' }, supportNeeded: { en: 'What would help you automate it?' }, trainingRequests: { en: 'Which task should we automate next?' }, otherComments: { en: 'Anything else?' } };
+await request(`/api/admin/plans/${copy.id}`, { method: 'PATCH', token: admin, data: { situations: [{ rarity: 'mythic', challenge: caseA.challenge }] }, expected: 400 });
+await request(`/api/admin/plans/${copy.id}`, { method: 'PATCH', token: admin, data: { feedbackQuestions: { ...feedbackWording, supportNeeded: { en: '' } } }, expected: 400 });
+const customised = (await request(`/api/admin/plans/${copy.id}`, { method: 'PATCH', token: admin, data: { situations: [caseA, caseB], feedbackQuestions: feedbackWording } })).plan;
+check(customised.situations.length === 2 && customised.feedbackQuestions.workChallenges.th === 'Which chore takes you longest each week?', 'A plan stores its own cases and feedback wording (Thai falls back to English).');
+const pub = await request(`/api/admin/plans/${copy.id}/publish`, { method: 'POST', token: admin, expected: 201 });
+
+// A presenter starts the room from the home page: passphrase check, plan list, then the chosen plan.
+await request('/api/presenter/plans', { method: 'POST', expected: 401 });
+await request('/api/presenter/plans', { method: 'POST', headers: { 'X-Host-Passphrase': 'wrong' }, expected: 401 });
+const offered = (await request('/api/presenter/plans', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass } })).plans;
+check(offered.some((item) => item.snapshotId === pub.snapshot.id && item.version === 1), 'The presenter list offers the newest published version of each plan.');
+await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { snapshotId: 'nope' }, expected: 404 });
+await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: {}, expected: 400 });
+const custom = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { snapshotId: pub.snapshot.id }, expected: 201 });
+const customState = (await request(`/api/rooms/${custom.roomCode}/state`, { token: custom.hostToken })).state;
+check(customState.snapshotId === pub.snapshot.id && customState.casePool.length === 2, 'A room from the home page presents the plan and carries its own case pool.');
+check(customState.feedbackQuestions.trainingRequests.en === 'Which task should we automate next?', 'The room carries the plan\'s feedback wording.');
+const drawn = (await request(`/api/rooms/${custom.roomCode}/control`, { method: 'POST', token: custom.hostToken, data: { action: 'open_case' } })).state;
+check(['case-1', 'case-2'].includes(drawn.caseRoll.situationId) && ['Slow report', 'Inbox flood'].includes(drawn.challenge.titleEn), 'Opening a case draws only from the plan\'s own pool.');
+
+// Turning case opening off keeps the plan's challenge and refuses the draw.
+await request(`/api/admin/plans/${copy.id}`, { method: 'PATCH', token: admin, data: { situations: [] } });
+const off = await request(`/api/admin/plans/${copy.id}/publish`, { method: 'POST', token: admin, expected: 201 });
+const offRoom = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { snapshotId: off.snapshot.id }, expected: 201 });
+check((await request(`/api/rooms/${offRoom.roomCode}/state`, { token: offRoom.hostToken })).state.casePool.length === 0, 'A plan can turn case opening off.');
+await request(`/api/rooms/${offRoom.roomCode}/control`, { method: 'POST', token: offRoom.hostToken, data: { action: 'open_case' }, expected: 409 });
+log('content in the studio: Skills lesson import, per-plan cases and feedback wording, rooms started from the home page');
+
 // ------------------------------------------------------- legacy rooms
-const legacy = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: {}, expected: 201 });
+const legacy = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': hostPass }, data: { builtIn: true }, expected: 201 });
 const legacyState = (await request(`/api/rooms/${legacy.roomCode}/state`, { token: legacy.hostToken })).state;
 check(legacyState.snapshotId === null && legacyState.totalSlides >= 7 && legacyState.slideSteps.slice(0, 7).join() === '0,5,2,5,0,0,0', 'Rooms without a snapshot keep the built-in Week 01 deck.');
 check((await request(`/api/rooms/${legacy.roomCode}/deck`, { token: legacy.hostToken })).deck === null, 'Legacy rooms have no published deck.');

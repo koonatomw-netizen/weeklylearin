@@ -7,14 +7,14 @@ export const LANDING_INDEX = 32;
 export const REEL_MS = 5200;
 
 /** A reel of weighted decoys with the winner at LANDING_INDEX and no tile repeated next to itself. */
-export function buildReelStrip(winner: Situation, random: () => number): Situation[] {
+export function buildReelStrip(winner: Situation, random: () => number, pool: readonly Situation[] = SITUATIONS): Situation[] {
   const strip: Situation[] = [];
   for (let index = 0; index < REEL_LENGTH; index += 1) {
     if (index === LANDING_INDEX) { strip.push(winner); continue; }
     const previous = strip[index - 1];
     const upcoming = index + 1 === LANDING_INDEX ? winner : undefined;
-    let pick = pickSituation(random, previous?.id);
-    if (upcoming && pick.id === upcoming.id) pick = SITUATIONS.find((item) => item.id !== previous?.id && item.id !== upcoming.id) ?? pick;
+    let pick = pickSituation(random, previous?.id, pool);
+    if (upcoming && pick.id === upcoming.id) pick = pool.find((item) => item.id !== previous?.id && item.id !== upcoming.id) ?? pick;
     strip.push(pick);
   }
   return strip;

@@ -1,5 +1,6 @@
 import { ApiError } from "../api";
-import type { Challenge, PublishedDeck } from "../shared/deck";
+import type { Challenge, FeedbackQuestions, PublishedDeck } from "../shared/deck";
+import type { Situation } from "../shared/situations";
 import type { SlideDoc } from "../shared/slideDoc";
 import type { TemplateId } from "../shared/templates";
 
@@ -8,6 +9,7 @@ export interface AdminLesson { id: string; title: string; category: string; desc
 export interface AdminLessonDetail extends AdminLesson { slides: AdminSlide[] }
 export interface AdminPlan {
   id: string; title: string; weekDate: string | null; durationMin: number | null; notes: string; challenge: Challenge;
+  situations: Situation[] | null; feedbackQuestions: FeedbackQuestions | null;
   status: "draft" | "published"; copiedFrom: string | null; createdAt: string; updatedAt: string; slideCount: number;
   latestVersion: number | null; latestSnapshotId: string | null; publishedAt: string | null; hasUnpublishedChanges: boolean;
 }
@@ -82,7 +84,7 @@ export const adminApi = {
   plan: (id: string) => call<{ plan: AdminPlanDetail }>(`/plans/${id}`),
   createPlan: (data: { title: string; weekDate?: string | null; durationMin?: number | null }) => call<{ plan: AdminPlanDetail }>("/plans", send("POST", data)),
   copyPlan: (id: string) => call<{ plan: AdminPlanDetail }>("/plans", send("POST", { copyFrom: id })),
-  updatePlan: (id: string, data: Partial<{ title: string; weekDate: string | null; durationMin: number | null; notes: string; challenge: Challenge; slideIds: string[] }>) =>
+  updatePlan: (id: string, data: Partial<{ title: string; weekDate: string | null; durationMin: number | null; notes: string; challenge: Challenge; slideIds: string[]; situations: Situation[] | null; feedbackQuestions: FeedbackQuestions | null }>) =>
     call<{ plan: AdminPlanDetail }>(`/plans/${id}`, send("PATCH", data)),
   deletePlan: (id: string) => call<{ ok: true }>(`/plans/${id}`, { method: "DELETE" }),
   publishPlan: (id: string) => call<{ snapshot: { id: string; version: number; publishedAt: string }; plan: AdminPlanDetail }>(`/plans/${id}/publish`, send("POST")),

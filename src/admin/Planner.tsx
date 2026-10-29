@@ -3,11 +3,13 @@ import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Copy, Eye, Plus, Radio, Ro
 import { tokens } from "../api";
 import { SlideStage } from "../slides/Deck";
 import { SlideRenderer } from "../slides/SlideRenderer";
-import type { Challenge } from "../shared/deck";
+import type { Challenge, FeedbackQuestions } from "../shared/deck";
+import type { Situation } from "../shared/situations";
 import type { SlideDoc } from "../shared/slideDoc";
 import type { Language } from "../shared/types";
 import { Notice, TerminalWindow, t } from "../ui";
 import { adminApi, type AdminLesson, type AdminLessonDetail, type AdminPlan, type AdminPlanDetail, type AdminSlide } from "./adminApi";
+import { FeedbackEditor, SituationsEditor } from "./PlanContentEditors";
 import { PreviewModal } from "./Library";
 
 /** Open a presenter tab for a freshly started session (the host token stays in this browser). */
@@ -89,12 +91,12 @@ export function PlanStatus({ plan, language }: { plan: Pick<AdminPlan, "latestVe
   return <span className={`status-chip ${plan.hasUnpublishedChanges ? "is-closed" : "is-revealed"}`}><i />v{plan.latestVersion}{plan.hasUnpublishedChanges ? ` · ${t(language, "unpublished changes", "มีการแก้ที่ยังไม่เผยแพร่")}` : ` · ${t(language, "published", "เผยแพร่แล้ว")}`}</span>;
 }
 
-interface Draft { title: string; weekDate: string; durationMin: string; notes: string; challenge: Challenge; slides: Array<{ slideId: string; title: string; lessonTitle: string; doc: SlideDoc }> }
+interface Draft { title: string; weekDate: string; durationMin: string; notes: string; challenge: Challenge; situations: Situation[] | null; feedbackQuestions: FeedbackQuestions | null; slides: Array<{ slideId: string; title: string; lessonTitle: string; doc: SlideDoc }> }
 
 function toDraft(plan: AdminPlanDetail): Draft {
   return {
     title: plan.title, weekDate: plan.weekDate ?? "", durationMin: plan.durationMin ? String(plan.durationMin) : "", notes: plan.notes,
-    challenge: plan.challenge, slides: plan.slides.map((slide) => ({ slideId: slide.slideId, title: slide.title, lessonTitle: slide.lessonTitle, doc: slide.doc })),
+    challenge: plan.challenge, situations: plan.situations, feedbackQuestions: plan.feedbackQuestions, slides: plan.slides.map((slide) => ({ slideId: slide.slideId, title: slide.title, lessonTitle: slide.lessonTitle, doc: slide.doc })),
   };
 }
 
@@ -143,7 +145,7 @@ function PlanEditor({ planId, language, onBack, onOpen }: { planId: string; lang
     if (!draft) return plan;
     const { plan: saved } = await adminApi.updatePlan(plan.id, {
       title: draft.title, weekDate: draft.weekDate || null, durationMin: draft.durationMin ? Number(draft.durationMin) : null, notes: draft.notes,
-      challenge: draft.challenge, slideIds: draft.slides.map((slide) => slide.slideId),
+      challenge: draft.challenge, situations: draft.situations, feedbackQuestions: draft.feedbackQuestions, slideIds: draft.slides.map((slide) => slide.slideId),
     });
     setPlan(saved);
     setDraft(toDraft(saved));
@@ -197,6 +199,9 @@ function PlanEditor({ planId, language, onBack, onOpen }: { planId: string; lang
         </div>
       </TerminalWindow>
     </div>
+
+    <SituationsEditor situations={draft.situations} onChange={(situations) => set({ situations })} language={language} />
+    <FeedbackEditor questions={draft.feedbackQuestions} onChange={(feedbackQuestions) => set({ feedbackQuestions })} language={language} />
 
     <div className="plan-builder">
       <TerminalWindow title={`plan.slides (${draft.slides.length})`}>

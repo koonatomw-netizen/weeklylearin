@@ -1,6 +1,6 @@
 import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, detectImage } from "../shared/imageInfo";
 import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDoc";
-import { TEMPLATE_IDS, createFromTemplate, week01Lesson, type TemplateId } from "../shared/templates";
+import { TEMPLATE_IDS, createFromTemplate, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
 import { HttpError, cleanLine, json, readBody } from "./http";
 import { handlePlans } from "./plans";
 import { randomSecret, sha256, type Env } from "./room-hub";
@@ -9,6 +9,7 @@ import { randomSecret, sha256, type Env } from "./room-hub";
 
 const SESSION_HOURS = 12;
 const STARTER_LESSON_ID = "week01-starter";
+const STARTER_SKILLS_LESSON_ID = "week01-skills-starter";
 
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -227,6 +228,18 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     return json({ lesson: await getLesson(env, id) }, 201);
   }
   if (path === "/seed/week01" && method === "POST") {
+    // The Skills segment used to live only in code; import it as its own lesson so it is editable here too.
+    if (!(await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(STARTER_SKILLS_LESSON_ID).first())) {
+      const now = new Date().toISOString();
+      const skills = skillsLesson(newElementId);
+      await db.batch([
+        db.prepare("INSERT INTO lessons (id, title, category, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(STARTER_SKILLS_LESSON_ID, "Week 01 · Part 2: Skills", "Prompt Engineering", "Reusable instructions (skills) segment — imported from the built-in deck.", now, now),
+        ...skills.map((slide, index) => db.prepare("INSERT INTO slides (id, lesson_id, position, title, doc_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+          .bind(crypto.randomUUID(), STARTER_SKILLS_LESSON_ID, index, slide.title, JSON.stringify(slide.doc), now, now)),
+        audit("lesson.seed_skills", { slides: skills.length }),
+      ]);
+    }
     const existing = await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(STARTER_LESSON_ID).first();
     if (existing) return json({ lesson: await getLesson(env, STARTER_LESSON_ID), created: false });
     const now = new Date().toISOString();

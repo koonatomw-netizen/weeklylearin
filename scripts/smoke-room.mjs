@@ -30,7 +30,8 @@ async function request(path, { method = 'GET', token, data, headers = {}, expect
 const config = await request('/api/config');
 check(config.hostReady === true, 'Host passphrase must be configured.');
 await request('/api/rooms', { method: 'POST', data: {}, expected: 401 });
-const created = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': passphrase }, data: {}, expected: 201 });
+await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': passphrase }, data: {}, expected: 400 });
+const created = await request('/api/rooms', { method: 'POST', headers: { 'X-Host-Passphrase': passphrase }, data: { builtIn: true }, expected: 201 });
 check(/^\d{6}$/.test(created.roomCode), 'Room code must be six digits.');
 const root = `/api/rooms/${created.roomCode}`;
 const host = created.hostToken;

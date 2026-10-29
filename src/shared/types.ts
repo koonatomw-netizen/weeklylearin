@@ -1,7 +1,7 @@
-import type { Challenge } from "./deck";
+import type { Challenge, FeedbackQuestions } from "./deck";
 import type { Rarity } from "./situations";
 
-export type { Challenge };
+export type { Challenge, FeedbackQuestions };
 export type Language = "en" | "th";
 export type Role = "host" | "participant";
 
@@ -102,6 +102,9 @@ export type FinalStatus = "not_ready" | "ready" | "running" | "tie" | "complete"
 /** The case the presenter last opened. `roll` increases on every open so screens can tell a new draw from a reload. */
 export interface CaseRollInfo { situationId: string; roll: number; rarity: Rarity }
 
+/** Title and rarity of one case in a plan's own pool, enough to draw the reel. */
+export interface CasePoolTile { id: string; rarity: Rarity; titleEn: string; titleTh: string }
+
 export interface SessionState {
   code: string;
   title: string;
@@ -116,6 +119,10 @@ export interface SessionState {
   challenge: Challenge;
   /** Set once the presenter has opened a case; `challenge` is then that case's situation. */
   caseRoll: CaseRollInfo | null;
+  /** The plan's own case pool (titles only); null = the built-in pool; [] = case opening is off. */
+  casePool: CasePoolTile[] | null;
+  /** Wording of the feedback questions for this session. */
+  feedbackQuestions: FeedbackQuestions;
   currentSlide: number;
   slideStep: number;
   participantCount: number;

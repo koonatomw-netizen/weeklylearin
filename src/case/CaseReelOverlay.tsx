@@ -33,9 +33,12 @@ export function CaseReelOverlay({ state, language }: { state: SessionState; lang
     const mode = shouldAnimate(seen.current, roll, reduced);
     if (mode === "none" || !roll) return;
     seen.current = roll.roll;
-    const winner = situationById(roll.situationId);
+    // A plan's own pool arrives as titles only; the drawn case's full text is the room's current challenge.
+    const custom = state.casePool?.map((tile): Situation => ({ id: tile.id, rarity: tile.rarity, challenge: { titleEn: tile.titleEn, titleTh: tile.titleTh, scenarioEn: "", scenarioTh: "", taskEn: "", taskTh: "" } }));
+    const found = situationById(roll.situationId, custom);
+    const winner = found && custom ? { ...found, challenge: state.challenge } : found;
     if (!winner) return;
-    setRun({ mode, winner, strip: buildReelStrip(winner, Math.random) });
+    setRun({ mode, winner, strip: buildReelStrip(winner, Math.random, custom) });
     setGo(false);
     setSkipped(false);
     setLanded(mode === "fade");

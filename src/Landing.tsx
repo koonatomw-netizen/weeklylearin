@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ArrowRight, LockKeyhole, Smartphone } from "lucide-react";
-import { createRoom, tokens } from "./api";
-import { FIVE_PARTS } from "./shared/challenge";
+import { createRoom, getPresenterPlans, tokens, type PresenterPlan } from "./api";
 import type { Language } from "./shared/types";
 import type { Theme } from "./theme";
 import { Brand, Cmd, Cursor, LanguageSwitch, Notice, TerminalWindow, ThemeToggle, t } from "./ui";
@@ -18,6 +17,8 @@ export default function Landing({ language, onLanguage, theme, onTheme, hostRead
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [plans, setPlans] = useState<PresenterPlan[] | null>(null);
+  const [planId, setPlanId] = useState("");
 
   async function startSession(event: React.FormEvent) {
     event.preventDefault();
@@ -25,7 +26,14 @@ export default function Landing({ language, onLanguage, theme, onTheme, hostRead
     setError("");
     setBusy(true);
     try {
-      const created = await createRoom(passphrase);
+      // Step 1: check the passphrase and load the published plans. Step 2: start a room from the chosen one.
+      if (plans === null) {
+        const { plans: available } = await getPresenterPlans(passphrase);
+        setPlans(available);
+        setPlanId(available[0]?.snapshotId ?? "");
+        return;
+      }
+      const created = await createRoom(passphrase, planId);
       tokens.setHost(created.roomCode, created.hostToken);
       navigate(`/?view=host&room=${created.roomCode}`);
     } catch (caught) {
@@ -53,17 +61,13 @@ export default function Landing({ language, onLanguage, theme, onTheme, hostRead
         <Cmd>whoami</Cmd>
         <p className="mono-dim">{t(language, "4Seas team member, ready to level up", "ทีม 4Seas พร้อมพัฒนาฝีมือ")}</p>
         <Cmd>cat today.md</Cmd>
-        <h1 className="hero-title">Prompt Engineering<span className="accent">.</span></h1>
-        <p className="hero-sub">{t(language, "A live, hands-on session: write prompts, check your own work, then battle it out with peer voting.", "เวิร์กช็อปสด: เขียนพรอมป์ เช็กงานตัวเอง แล้วแข่งกันด้วยการโหวตของเพื่อนร่วมทีม")}</p>
+        <h1 className="hero-title">{t(language, "Live Training", "อบรมสด")}<span className="accent">.</span></h1>
+        <p className="hero-sub">{t(language, "Weekly hands-on sessions for the 4Seas team: learn together on the big screen, join from your phone with a room code.", "เวิร์กช็อปสดรายสัปดาห์ของทีม 4Seas: เรียนรู้ร่วมกันบนจอใหญ่ และเข้าร่วมจากมือถือด้วยรหัสห้อง")}</p>
         <ol className="hero-flow mono">
-          {["write", "self-check", "improve", "select", "battle", "vote", "reveal"].map((step, index) => <li key={step}><span>{index + 1}</span>{step}</li>)}
+          {["join", "learn", "try", "vote", "feedback"].map((step, index) => <li key={step}><span>{index + 1}</span>{step}</li>)}
         </ol>
         <Cmd><Cursor /></Cmd>
       </TerminalWindow>
-      <aside className="hero-parts">
-        <p className="field-label">// {t(language, "the five-part formula", "สูตร 5 ส่วน")}</p>
-        <ol>{FIVE_PARTS.map((part, index) => <li key={part.key}><span className="mono accent">0{index + 1}</span><b>{part.en}</b><small>{part.th}</small></li>)}</ol>
-      </aside>
     </section>
 
     {error && <div className="landing-notice"><Notice>{error}</Notice></div>}
@@ -82,15 +86,24 @@ export default function Landing({ language, onLanguage, theme, onTheme, hostRead
       <TerminalWindow title="presenter.sh" className="entry">
         <form onSubmit={startSession}>
           <h2><LockKeyhole size={20} />{t(language, "Presenter", "ผู้สอน")}</h2>
-          <p className="hint">{t(language, "Create a room and run slides, writing, battles and results.", "สร้างห้อง แล้วควบคุมสไลด์ การเขียน แบทเทิล และผลลัพธ์")}</p>
+          <p className="hint">{t(language, "Pick a published session and run it: slides, activities and results.", "เลือกเซสชันที่เผยแพร่แล้วและควบคุมสไลด์ กิจกรรม และผลลัพธ์")}</p>
           {hostReady === false && <Notice kind="info">{t(language, "Presenter setup needed: set HOST_PASSPHRASE (in .dev.vars locally, or as a Worker secret).", "ต้องตั้งค่า HOST_PASSPHRASE ก่อน (ใน .dev.vars หรือเป็น secret ของ Worker)")}</Notice>}
           <label className="field-label" htmlFor="host-passphrase">{t(language, "presenter passphrase", "รหัสผู้สอน")}</label>
-          <input id="host-passphrase" className="input" type="password" autoComplete="current-password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} required />
-          <button className="btn btn--block" type="submit" disabled={busy || hostReady === false || !passphrase}>{busy ? t(language, "Creating…", "กำลังสร้าง…") : t(language, "Create room", "สร้างห้อง")}<ArrowRight size={16} /></button>
+          <input id="host-passphrase" className="input" type="password" autoComplete="current-password" value={passphrase} readOnly={plans !== null}
+            onChange={(event) => setPassphrase(event.target.value)} required />
+          {plans !== null && (plans.length ? <>
+            <label className="field-label" htmlFor="plan-pick">{t(language, "session to run", "เซสชันที่จะสอน")}</label>
+            <select id="plan-pick" className="input" value={planId} onChange={(event) => setPlanId(event.target.value)}>
+              {plans.map((plan) => <option key={plan.snapshotId} value={plan.snapshotId}>{plan.weekDate ? `${plan.weekDate} · ` : ""}{plan.title} (v{plan.version})</option>)}
+            </select>
+          </> : <Notice kind="info">{t(language, "No published plans yet. Publish one in the Training Studio, then come back.", "ยังไม่มีแผนที่เผยแพร่ เผยแพร่ใน Training Studio ก่อนแล้วกลับมาที่นี่")}</Notice>)}
+          <button className="btn btn--block" type="submit" disabled={busy || hostReady === false || !passphrase || (plans !== null && !planId)}>
+            {busy ? t(language, "Working…", "กำลังทำงาน…") : plans === null ? t(language, "Continue", "ต่อไป") : t(language, "Create room", "สร้างห้อง")}<ArrowRight size={16} /></button>
+          {plans !== null && <button type="button" className="link-button" onClick={() => { setPlans(null); setError(""); }}>{t(language, "Use a different passphrase", "ใช้รหัสอื่น")}</button>}
         </form>
       </TerminalWindow>
     </section>
 
-    <footer className="landing-foot mono-dim">{t(language, "No AI judge — the room decides by vote.", "ไม่มี AI ตัดสิน — ทุกคนในห้องโหวตตัดสินเอง")} · <button className="link-button" style={{ display: "inline-flex" }} onClick={() => navigate("/?view=admin")}>{t(language, "Training Studio (admin)", "Training Studio (ผู้ดูแล)")}</button></footer>
+    <footer className="landing-foot mono-dim"><button className="link-button" style={{ display: "inline-flex" }} onClick={() => navigate("/?view=admin")}>{t(language, "Training Studio (admin)", "Training Studio (ผู้ดูแล)")}</button></footer>
   </main>;
 }

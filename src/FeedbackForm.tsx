@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CircleCheck, LoaderCircle, Send, ShieldCheck, Star } from "lucide-react";
 import { ApiError, getRoom, submitFeedback } from "./api";
-import type { FeedbackAnswers, Language, ParticipantSelf, RoomEnvelope } from "./shared/types";
+import type { FeedbackAnswers, FeedbackQuestions, Language, ParticipantSelf, RoomEnvelope } from "./shared/types";
 import { FEEDBACK_TEXT_MAX } from "./shared/types";
 import { Cmd, Cursor, Notice, TerminalWindow, t } from "./ui";
 
@@ -9,9 +9,10 @@ type Draft = Omit<FeedbackAnswers, "trainingRating"> & { trainingRating: number 
 const emptyDraft: Draft = { trainingRating: null, workChallenges: "", supportNeeded: "", trainingRequests: "", otherComments: "" };
 
 /** Mandatory end-of-session feedback. No skip: the draft survives refreshes and dropped connections. */
-export function WeeklyFeedback({ me, code, token, language, setRoom }: {
-  me: ParticipantSelf; code: string; token: string; language: Language; setRoom: (room: RoomEnvelope) => void;
+export function WeeklyFeedback({ me, code, token, language, setRoom, questions }: {
+  me: ParticipantSelf; code: string; token: string; language: Language; setRoom: (room: RoomEnvelope) => void; questions: FeedbackQuestions;
 }) {
+  const ask = (slot: keyof FeedbackQuestions) => t(language, questions[slot].en, questions[slot].th);
   const draftKey = `4seas:feedback:${code}`;
   const [draft, setDraft] = useState<Draft>(() => {
     try { return { ...emptyDraft, ...JSON.parse(localStorage.getItem(draftKey) ?? "{}") as Partial<Draft> }; } catch { return emptyDraft; }
@@ -88,7 +89,7 @@ export function WeeklyFeedback({ me, code, token, language, setRoom }: {
         "แบบสอบถามนี้ระบุชื่อ: คำตอบจะแนบชื่อของคุณ มีเพียงผู้สอนและผู้บริหาร 4Seas ที่ได้รับสิทธิ์เท่านั้นที่อ่านได้ ใช้เพื่อวางแผนการช่วยเหลือและการอบรม และไม่เกี่ยวกับคะแนน Prompt Battle ตอบว่า \"ไม่มี\" ได้เลย")}</p>
 
       <fieldset className="fb-field">
-        <legend className="fb-label">1. {t(language, "How useful was today's training?", "การอบรมวันนี้มีประโยชน์แค่ไหน?")} *</legend>
+        <legend className="fb-label">1. {ask("trainingRating")} *</legend>
         <div className="fb-stars" role="radiogroup" aria-label={t(language, "Training rating", "คะแนนการอบรม")}>
           {[1, 2, 3, 4, 5].map((value) => <button type="button" key={value} role="radio" aria-checked={draft.trainingRating === value} aria-label={`${value} / 5`}
             className={`fb-star${draft.trainingRating !== null && value <= draft.trainingRating ? " is-on" : ""}`} onClick={() => set("trainingRating", value)}>
@@ -97,10 +98,10 @@ export function WeeklyFeedback({ me, code, token, language, setRoom }: {
         </div>
         {touched && missing.trainingRating && <span className="fb-error">{t(language, "Choose a rating from 1 to 5.", "เลือกคะแนน 1–5")}</span>}
       </fieldset>
-      {text("workChallenges", 2, t(language, "What challenges did you face at work this week?", "สัปดาห์นี้เจอปัญหาอะไรในการทำงานบ้าง?"), t(language, "Describe the issue or enter 'None'", "อธิบายปัญหา หรือพิมพ์ 'ไม่มี'"), true)}
-      {text("supportNeeded", 3, t(language, "What support do you need?", "ต้องการความช่วยเหลืออะไร?"), t(language, "Describe what you need or enter 'None'", "บอกสิ่งที่ต้องการ หรือพิมพ์ 'ไม่มี'"), true)}
-      {text("trainingRequests", 4, t(language, "What would you like to learn next?", "อยากเรียนอะไรต่อไป?"), t(language, "Suggest a training topic or enter 'None'", "เสนอหัวข้ออบรม หรือพิมพ์ 'ไม่มี'"), true)}
-      {text("otherComments", 5, t(language, "Other comments", "ความคิดเห็นอื่นๆ"), t(language, "Any additional suggestions…", "ข้อเสนอแนะเพิ่มเติม…"), false)}
+      {text("workChallenges", 2, ask("workChallenges"), t(language, "Your answer, or enter 'None'", "คำตอบของคุณ หรือพิมพ์ 'ไม่มี'"), true)}
+      {text("supportNeeded", 3, ask("supportNeeded"), t(language, "Your answer, or enter 'None'", "คำตอบของคุณ หรือพิมพ์ 'ไม่มี'"), true)}
+      {text("trainingRequests", 4, ask("trainingRequests"), t(language, "Your answer, or enter 'None'", "คำตอบของคุณ หรือพิมพ์ 'ไม่มี'"), true)}
+      {text("otherComments", 5, ask("otherComments"), t(language, "Any additional suggestions…", "ข้อเสนอแนะเพิ่มเติม…"), false)}
 
       {error && <Notice>{error}</Notice>}
       <button className="btn btn--accent btn--block" type="submit" disabled={sending}>

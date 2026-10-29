@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { LEGACY_META } from "../src/shared/deck";
 import { SITUATIONS } from "../src/shared/situations";
-import { buildEnvelope, finalSummary } from "../src/worker/view";
+import { DEFAULT_FEEDBACK_QUESTIONS } from "../src/shared/deck";
+import { buildEnvelope, caseBlockReason, finalSummary } from "../src/worker/view";
 import { snapshot } from "./helpers/snapshot";
 
 describe("buildEnvelope", () => {
@@ -105,5 +106,27 @@ describe("buildEnvelope case opening", () => {
     const { state } = buildEnvelope(s, "participant", "p5");
     expect(state.challenge).toEqual(LEGACY_META.challenge);
     expect(state.caseRoll).toBeNull();
+  });
+});
+
+describe("per-plan content", () => {
+  const plan = { ...LEGACY_META, situations: [{ id: "c1", rarity: "common" as const, challenge: { ...LEGACY_META.challenge, titleEn: "Slow report" } }], feedbackQuestions: { ...DEFAULT_FEEDBACK_QUESTIONS, workChallenges: { en: "Which task took longest?", th: "งานไหนใช้เวลานานสุด?" } } };
+
+  it("sends the built-in defaults when a plan sets nothing", () => {
+    const state = buildEnvelope(snapshot(), "host").state;
+    expect(state.casePool).toBeNull();
+    expect(state.feedbackQuestions).toEqual(DEFAULT_FEEDBACK_QUESTIONS);
+  });
+
+  it("sends the plan's own pool as titles and its feedback wording", () => {
+    const state = buildEnvelope(snapshot({ meta: plan, room: { ...snapshot().room, case_situation_id: "c1", case_roll: 1 } }), "host").state;
+    expect(state.casePool).toEqual([{ id: "c1", rarity: "common", titleEn: "Slow report", titleTh: "การสื่อสารกับแขก" }]);
+    expect(state.feedbackQuestions.workChallenges.en).toBe("Which task took longest?");
+    expect(state.caseRoll?.situationId).toBe("c1");
+    expect(state.challenge.titleEn).toBe("Slow report");
+  });
+
+  it("blocks case opening when the plan turned it off", () => {
+    expect(caseBlockReason(snapshot({ meta: { ...LEGACY_META, situations: [] }, battles: [], submissions: [] }))).toMatch(/turned off/);
   });
 });
