@@ -1,7 +1,7 @@
 import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, detectImage } from "../shared/imageInfo";
 import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDoc";
 import { WEEK01_CHALLENGE } from "../shared/challenge";
-import { TEMPLATE_IDS, createFromTemplate, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
+import { TEMPLATE_IDS, aiFeedbackSlide, createFromTemplate, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
 import { WEEK01_GAMES, WEEK02_GAMES } from "../shared/starterGames";
 import { WEEK02_CHALLENGE, WEEK02_FEEDBACK, WEEK02_NOTES, WEEK02_SITUATIONS, WEEK02_TITLE, week02Lesson } from "../shared/week02";
 import { HttpError, cleanLine, json, readBody } from "./http";
@@ -309,6 +309,48 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
       audit("lesson.seed_week02", { slides: slides.length }),
     ]);
     return json({ lesson: await getLesson(env, WEEK02_LESSON_ID), planId: WEEK02_PLAN_ID, created: true }, 201);
+  }
+
+  if (path === "/seed/ai-feedback-slide" && method === "POST") {
+    // Lessons imported before the AI feedback slide existed: add it before "Live Prompt Challenge". Safe to run again.
+    const title = aiFeedbackSlide(newElementId).title;
+    const results: Array<{ lessonId: string; status: string; draftPlansUpdated?: number; publishedPlansToRepublish?: number }> = [];
+    for (const lessonId of [STARTER_LESSON_ID, WEEK02_LESSON_ID]) {
+      if (!(await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(lessonId).first())) { results.push({ lessonId, status: "lesson not imported" }); continue; }
+      if (await db.prepare("SELECT id FROM slides WHERE lesson_id = ? AND title = ?").bind(lessonId, title).first()) { results.push({ lessonId, status: "already has the slide" }); continue; }
+      const anchor = await db.prepare("SELECT id FROM slides WHERE lesson_id = ? AND title = 'Live Prompt Challenge' ORDER BY position, created_at LIMIT 1").bind(lessonId).first<{ id: string }>();
+      if (!anchor) { results.push({ lessonId, status: "no Live Prompt Challenge slide to place it before" }); continue; }
+      const rows = await db.prepare("SELECT id FROM slides WHERE lesson_id = ? ORDER BY position, created_at").bind(lessonId).all<{ id: string }>();
+      const ordered = rows.results.map((row) => row.id);
+      const insertAt = ordered.indexOf(anchor.id);
+      const slideId = crypto.randomUUID();
+      ordered.splice(insertAt, 0, slideId);
+      const plans = await db.prepare(`SELECT DISTINCT p.id, p.status FROM training_plans p JOIN training_plan_slides x ON x.plan_id = p.id WHERE x.slide_id = ?`)
+        .bind(anchor.id).all<{ id: string; status: string }>();
+      const drafts = plans.results.filter((plan) => plan.status === "draft");
+      const planSlides = await Promise.all(drafts.map(async (plan) => {
+        const list = await db.prepare("SELECT slide_id FROM training_plan_slides WHERE plan_id = ? ORDER BY position").bind(plan.id).all<{ slide_id: string }>();
+        const ids = list.results.map((row) => row.slide_id);
+        ids.splice(ids.indexOf(anchor.id), 0, slideId);
+        return { planId: plan.id, ids };
+      }));
+      const now = new Date().toISOString();
+      await db.batch([
+        db.prepare("INSERT INTO slides (id, lesson_id, position, title, doc_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+          .bind(slideId, lessonId, insertAt, title, JSON.stringify(aiFeedbackSlide(newElementId).doc), now, now),
+        ...ordered.map((id, index) => db.prepare("UPDATE slides SET position = ? WHERE id = ?").bind(index, id)),
+        db.prepare("UPDATE lessons SET updated_at = ? WHERE id = ?").bind(now, lessonId),
+        // Plan slides are keyed by position, so each draft plan is rewritten whole.
+        ...planSlides.flatMap(({ planId, ids }) => [
+          db.prepare("DELETE FROM training_plan_slides WHERE plan_id = ?").bind(planId),
+          ...ids.map((id, position) => db.prepare("INSERT INTO training_plan_slides (plan_id, slide_id, position) VALUES (?, ?, ?)").bind(planId, id, position)),
+          db.prepare("UPDATE training_plans SET updated_at = ? WHERE id = ?").bind(now, planId),
+        ]),
+        audit("lesson.seed_ai_feedback_slide", { lessonId, slideId, draftPlans: drafts.length }),
+      ]);
+      results.push({ lessonId, status: "added", draftPlansUpdated: drafts.length, publishedPlansToRepublish: plans.results.length - drafts.length });
+    }
+    return json({ results });
   }
 
   const lessonMatch = path.match(/^\/lessons\/([A-Za-z0-9-]{1,64})(\/slides|\/reorder)?$/);
