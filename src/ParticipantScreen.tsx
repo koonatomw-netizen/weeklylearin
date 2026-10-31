@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CircleCheck, Copy, LoaderCircle, Lock, Send, Trophy, WifiOff } from "lucide-react";
-import { castVote, newRequestId, saveChecklist, selectFinal, submitPrompt, tokens } from "./api";
+import { castVote, getAiFeedback, newRequestId, saveChecklist, selectFinal, submitPrompt, tokens } from "./api";
 import { PixelIcon } from "./case/PixelIcon";
 import { GamePlay } from "./games/GamePlay";
 import { WeeklyFeedback } from "./FeedbackForm";
 import { battleTitle } from "./slides/Deck";
 import { FIVE_PARTS } from "./shared/challenge";
-import type { BattleView, Checklist, Language, OwnSubmission, ParticipantSelf, RoomEnvelope, SessionState } from "./shared/types";
+import type { AiFeedback, BattleView, Checklist, Language, OwnSubmission, ParticipantSelf, RoomEnvelope, SessionState } from "./shared/types";
 import { MAX_ATTEMPTS, PROMPT_MAX, PROMPT_MIN } from "./shared/types";
 import type { Theme } from "./theme";
 import { useRoom } from "./useRoom";
@@ -167,6 +167,17 @@ function SelfCheck({ submission, code, token, language, setRoom, canImprove, onI
 }) {
   const [checks, setChecks] = useState<Checklist>(submission.checklist);
   const ticked = FIVE_PARTS.filter((part) => checks[part.key]).length;
+  const [ai, setAi] = useState<AiFeedback | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  async function askAi() {
+    setAiBusy(true);
+    setAiError("");
+    try { setAi((await getAiFeedback(code, token, submission.id)).feedback); }
+    catch (caught) { setAiError(caught instanceof Error ? caught.message : "AI feedback failed."); }
+    finally { setAiBusy(false); }
+  }
 
   async function toggle(key: keyof Checklist) {
     const next = { ...checks, [key]: !checks[key] };
@@ -186,6 +197,19 @@ function SelfCheck({ submission, code, token, language, setRoom, canImprove, onI
         </label>
       </li>)}
     </ul>
+    {ai ? <div className="p-card">
+      <p className="p-copy"><b>{t(language, "AI feedback", "ฟีดแบ็กจาก AI")} · {ai.total}/100</b></p>
+      <p className="mono-dim">{FIVE_PARTS.map((part) => `${part.en} ${ai.rubric[part.key]}`).join(" · ")}</p>
+      <p className="p-copy">{t(language, ai.feedbackEn, ai.feedbackTh)}</p>
+      {ai.strengths.length > 0 && <ul className="checklist">{ai.strengths.map((item) => <li key={item}>✓ {item}</li>)}</ul>}
+      {ai.nextSteps.length > 0 && <ul className="checklist">{ai.nextSteps.map((item) => <li key={item}>→ {item}</li>)}</ul>}
+      <p className="mono-dim">{t(language, "Only you can see this. It is a guide, not a score, and it does not affect votes or ranking.", "มีแค่คุณที่เห็น เป็นแนวทาง ไม่ใช่คะแนน และไม่มีผลต่อการโหวตหรืออันดับ")}</p>
+    </div> : <>
+      {aiError && <Notice>{aiError}</Notice>}
+      <button className="btn btn--ghost" disabled={aiBusy} onClick={() => void askAi()}>
+        {aiBusy ? <><LoaderCircle className="spin" size={16} />{t(language, "Checking… this can take up to a minute", "กำลังตรวจ… อาจใช้เวลาถึงหนึ่งนาที")}</> : t(language, "Get AI feedback (private)", "ขอฟีดแบ็กจาก AI (ส่วนตัว)")}
+      </button>
+    </>}
     <div className="button-row">
       {canImprove && <button className="btn btn--accent" onClick={onImprove}>{t(language, "Improve this prompt", "ปรับปรุงพรอมป์นี้")}</button>}
       <button className="btn btn--ghost" onClick={onDone}>{t(language, "Done", "เสร็จแล้ว")}</button>

@@ -207,3 +207,13 @@ export type ControlAction =
   | { action: "game_reveal" }
   | { action: "game_next" }
   | { action: "game_stop" };
+
+/** Private AI feedback on one prompt. It is a learning aid for that participant only and never feeds a score or a vote. */
+export interface AiFeedback {
+  total: number;
+  rubric: Record<ChecklistKey, number>;
+  feedbackEn: string;
+  feedbackTh: string;
+  strengths: string[];
+  nextSteps: string[];
+}

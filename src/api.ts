@@ -1,5 +1,5 @@
 import type { PublishedDeck } from "./shared/deck";
-import type { Checklist, ControlAction, FeedbackAnswers, FeedbackResponse, RoomEnvelope } from "./shared/types";
+import type { AiFeedback, Checklist, ControlAction, FeedbackAnswers, FeedbackResponse, RoomEnvelope } from "./shared/types";
 
 export class ApiError extends Error {
   constructor(message: string, readonly status = 0) {
@@ -49,6 +49,9 @@ export const submitPrompt = (code: string, token: string, prompt: string, reques
 
 export const saveChecklist = (code: string, token: string, submissionId: string, checklist: Checklist) =>
   jsonRequest<RoomEnvelope>(room(code, "checklist"), { method: "POST", headers: auth(token), body: JSON.stringify({ submissionId, checklist }) });
+
+export const getAiFeedback = (code: string, token: string, submissionId: string) =>
+  jsonRequest<{ feedback: AiFeedback }>(room(code, "aifeedback"), { method: "POST", headers: auth(token), body: JSON.stringify({ submissionId }) });
 
 export const selectFinal = (code: string, token: string, submissionId: string) =>
   jsonRequest<RoomEnvelope>(room(code, "final"), { method: "POST", headers: auth(token), body: JSON.stringify({ submissionId }) });

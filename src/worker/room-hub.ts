@@ -2,10 +2,11 @@ import { formGroups, shuffle, topEntryIds } from "../shared/battle";
 import { GAME_LIMITS } from "../shared/games";
 import { LEGACY_META, deckMeta, type DeckMeta, type PublishedDeck } from "../shared/deck";
 import type { WidgetKind } from "../shared/slideDoc";
-import { SITUATIONS, pickSituation } from "../shared/situations";
+import { SITUATIONS, pickSituation, situationById } from "../shared/situations";
+import { AiBusyError, aiConfigured, aiFeedback } from "./ai";
 import {
   FEEDBACK_TEXT_MAX, MAX_ATTEMPTS, MAX_PARTICIPANTS, PROMPT_MAX, PROMPT_MIN,
-  type ChecklistKey, type ControlAction, type FeedbackResponse, type Role,
+  type AiFeedback, type ChecklistKey, type ControlAction, type FeedbackResponse, type Role,
 } from "../shared/types";
 import {
   buildEnvelope, caseBlockReason, entriesOf, eligibleVoters, finalSummary, orderedBattles, voteCounts,
@@ -21,6 +22,9 @@ export interface Env {
   HOST_PASSPHRASE?: string;
   ADMIN_PASSPHRASE?: string;
   ASSET_BUCKET?: R2Bucket;
+  /** Optional. Without it the self-check screen simply has no AI feedback button. */
+  TOKENME_API_KEY?: string;
+  TOKENME_MODEL?: string;
 }
 
 interface Ticket { role: Role; participantId?: string; expiresAt: number }
@@ -94,6 +98,8 @@ export class RoomHub {
   private readonly code: string;
   private readonly locks = new Map<string, Promise<unknown>>();
   private readonly rate = new Map<string, { count: number; reset: number }>();
+  /** AI feedback by submission id, so a repeated tap does not cost another request. Lost if the room object restarts, which is fine. */
+  private readonly aiCache = new Map<string, AiFeedback>();
   private broadcasting: Promise<void> | null = null;
   private dirty = false;
   private deck: { id: string; deck: PublishedDeck; meta: DeckMeta } | null = null;
@@ -122,6 +128,7 @@ export class RoomHub {
       else if (pathname === "/ticket" && request.method === "POST") response = await this.createTicket(request, room);
       else if (pathname === "/submit" && request.method === "POST") response = await this.submit(request, room);
       else if (pathname === "/checklist" && request.method === "POST") response = await this.saveChecklist(request, room);
+      else if (pathname === "/aifeedback" && request.method === "POST") response = await this.aiFeedback(request, room);
       else if (pathname === "/final" && request.method === "POST") response = await this.selectFinal(request, room);
       else if (pathname === "/vote" && request.method === "POST") response = await this.vote(request, room);
       else if (pathname === "/answer" && request.method === "POST") response = await this.answerGame(request, room);
@@ -324,6 +331,31 @@ export class RoomHub {
       .bind(JSON.stringify(checklist), String(body.submissionId ?? ""), participant.id).run();
     if (!result.meta.changes) return json({ error: "That submission was not found." }, 404);
     return this.envelopeFor({ role: "participant", participant });
+  }
+
+  /** Private feedback on one of the caller's own prompts. It never touches scores, votes or the leaderboard. */
+  private async aiFeedback(request: Request, room: RoomRow): Promise<Response> {
+    const participant = await this.requireParticipant(request, room);
+    this.limit(`ai:${participant.id}`, 6);
+    this.limit("ai:room", 150, 10 * 60_000);
+    const body = await readBody<{ submissionId: string }>(request);
+    const submission = await this.env.DB.prepare("SELECT id, prompt_text FROM prompt_submissions WHERE id = ? AND participant_id = ?")
+      .bind(String(body.submissionId ?? ""), participant.id).first<{ id: string; prompt_text: string }>();
+    if (!submission) throw new HttpError(404, "That submission was not found.");
+    if (!aiConfigured(this.env)) throw new HttpError(503, "AI feedback is not set up for this session. Use the self-check list instead. / ยังไม่ได้เปิดฟีดแบ็กจาก AI ใช้รายการเช็กตัวเองแทน");
+    const cached = this.aiCache.get(submission.id);
+    if (cached) return json({ feedback: cached });
+    const snapshot = await this.snapshot();
+    const challenge = situationById(snapshot.room.case_situation_id, snapshot.meta.situations ?? undefined)?.challenge ?? snapshot.meta.challenge;
+    try {
+      const feedback = await aiFeedback(submission.prompt_text, challenge, this.env);
+      this.aiCache.set(submission.id, feedback);
+      return json({ feedback });
+    } catch (error) {
+      if (error instanceof AiBusyError) throw new HttpError(503, "The AI helper is busy. Try again in a moment, or use the self-check list. / AI กำลังหนาแน่น ลองใหม่อีกครั้ง หรือใช้รายการเช็กตัวเองแทน");
+      console.error("ai feedback failed", error instanceof Error ? error.message : error);
+      throw new HttpError(502, "The AI helper is unavailable right now. Use the self-check list instead. / AI ใช้งานไม่ได้ในตอนนี้ ใช้รายการเช็กตัวเองแทน");
+    }
   }
 
   private async selectFinal(request: Request, room: RoomRow): Promise<Response> {
