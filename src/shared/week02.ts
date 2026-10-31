@@ -245,7 +245,7 @@ export function week02Lesson(id: MakeId): Array<{ title: string; doc: SlideDoc }
       title: "Live Prompt Challenge",
       doc: doc([
         ...chrome(id, "live challenge"),
-        ...heading(id, "live activity", "Live Prompt Challenge"),
+        ...heading(id, "live activity", "Live Prompt Challenge", 1000),
         widget(id, 64, 260, 1000, 400, "challenge"),
         widget(id, 64, 680, 1000, 130, "live-stats"),
         widget(id, 1104, 140, 432, 670, "join"),

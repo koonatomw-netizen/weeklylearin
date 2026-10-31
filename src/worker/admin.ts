@@ -1,8 +1,10 @@
 import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, detectImage } from "../shared/imageInfo";
 import { validateSlideDoc, withFreshIds, type SlideDoc } from "../shared/slideDoc";
 import { WEEK01_CHALLENGE } from "../shared/challenge";
-import { TEMPLATE_IDS, aiFeedbackSlide, createFromTemplate, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
-import { WEEK01_GAMES, WEEK02_GAMES } from "../shared/starterGames";
+import { TEMPLATE_IDS, aiFeedbackSlide, createFromTemplate, headToHeadLesson, skillsLesson, week01Lesson, type TemplateId } from "../shared/templates";
+import { HEAD_TO_HEAD_GAMES, WEEK01_GAMES, WEEK02_GAMES } from "../shared/starterGames";
+import { weekId, weekLesson, weekPlanId, weekTitle } from "../shared/curriculum";
+import { CURRICULUM } from "../shared/curriculumWeeks";
 import { WEEK02_CHALLENGE, WEEK02_FEEDBACK, WEEK02_NOTES, WEEK02_SITUATIONS, WEEK02_TITLE, week02Lesson } from "../shared/week02";
 import { HttpError, cleanLine, json, readBody } from "./http";
 import { handleCaseSets } from "./caseSets";
@@ -17,6 +19,8 @@ const STARTER_SKILLS_LESSON_ID = "week01-skills-starter";
 const WEEK01_PLAN_ID = "week01-starter-plan";
 const WEEK02_LESSON_ID = "week02-starter";
 const WEEK02_PLAN_ID = "week02-starter-plan";
+const HEAD_TO_HEAD_LESSON_ID = "head2head-starter";
+const HEAD_TO_HEAD_PLAN_ID = "head2head-starter-plan";
 
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -309,6 +313,57 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
       audit("lesson.seed_week02", { slides: slides.length }),
     ]);
     return json({ lesson: await getLesson(env, WEEK02_LESSON_ID), planId: WEEK02_PLAN_ID, created: true }, 201);
+  }
+
+  if (path === "/seed/curriculum" && method === "POST") {
+    // Weeks 3 to 12: each missing week becomes a lesson plus a draft plan with its games (and challenge, for prompt-writing weeks). Safe to run again.
+    const results: Array<{ week: number; lessonId: string; planId: string; status: string; slides?: number; games?: number }> = [];
+    for (const spec of CURRICULUM) {
+      const lessonId = weekId(spec.number);
+      const planId = weekPlanId(spec.number);
+      if (await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(lessonId).first()) { results.push({ week: spec.number, lessonId, planId, status: "already imported" }); continue; }
+      const now = new Date().toISOString();
+      const slides = weekLesson(spec, newElementId).map((slide) => ({ ...slide, id: crypto.randomUUID() }));
+      const challenge = spec.challenge ?? {
+        titleEn: "No live challenge this week", titleTh: "สัปดาห์นี้ไม่มีโจทย์สด",
+        scenarioEn: "This week runs on the Game Hub games.", scenarioTh: "สัปดาห์นี้เล่นด้วยเกมใน Game Hub",
+        taskEn: "Open the games from the presenter controls.", taskTh: "เปิดเกมจากแผงควบคุมของผู้บรรยาย",
+      };
+      await db.batch([
+        db.prepare("INSERT INTO lessons (id, title, category, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(lessonId, weekTitle(spec), spec.category, spec.outcome.en, now, now),
+        ...slides.map((slide, index) => db.prepare("INSERT INTO slides (id, lesson_id, position, title, doc_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+          .bind(slide.id, lessonId, index, slide.title, JSON.stringify(slide.doc), now, now)),
+        db.prepare(`INSERT OR IGNORE INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, games_json, status, created_at, updated_at)
+          VALUES (?, ?, NULL, ?, ?, ?, ?, 'draft', ?, ?)`)
+          .bind(planId, weekTitle(spec), spec.durationMin, spec.planNotes, JSON.stringify(challenge), JSON.stringify(spec.games), now, now),
+        ...slides.map((slide, index) => db.prepare("INSERT OR IGNORE INTO training_plan_slides (plan_id, slide_id, position) VALUES (?, ?, ?)").bind(planId, slide.id, index)),
+        audit("lesson.seed_curriculum", { week: spec.number, slides: slides.length }),
+      ]);
+      results.push({ week: spec.number, lessonId, planId, status: "imported", slides: slides.length, games: spec.games.length });
+    }
+    return json({ results }, results.some((row) => row.status === "imported") ? 201 : 200);
+  }
+
+  if (path === "/seed/head-to-head" && method === "POST") {
+    // A reusable blind-vote segment: five slides with placeholder answers to paste over, and a draft plan carrying the poll.
+    if (await db.prepare("SELECT id FROM lessons WHERE id = ?").bind(HEAD_TO_HEAD_LESSON_ID).first()) {
+      return json({ lesson: await getLesson(env, HEAD_TO_HEAD_LESSON_ID), planId: HEAD_TO_HEAD_PLAN_ID, created: false });
+    }
+    const now = new Date().toISOString();
+    const slides = headToHeadLesson(newElementId).map((slide) => ({ ...slide, id: crypto.randomUUID() }));
+    await db.batch([
+      db.prepare("INSERT INTO lessons (id, title, category, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(HEAD_TO_HEAD_LESSON_ID, "Segment · Head-to-Head: ChatGPT vs Claude", "Everyday AI", "Blind vote between two prepared answers, then reveal the authors. Paste your own answers over the placeholders before the session.", now, now),
+      ...slides.map((slide, index) => db.prepare("INSERT INTO slides (id, lesson_id, position, title, doc_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+        .bind(slide.id, HEAD_TO_HEAD_LESSON_ID, index, slide.title, JSON.stringify(slide.doc), now, now)),
+      db.prepare(`INSERT OR IGNORE INTO training_plans (id, title, week_date, duration_min, notes, challenge_json, games_json, status, created_at, updated_at)
+        VALUES (?, ?, NULL, 20, ?, ?, ?, 'draft', ?, ?)`)
+        .bind(HEAD_TO_HEAD_PLAN_ID, "Segment · Head-to-Head: ChatGPT vs Claude", "Paste your prepared answers over the placeholders first. The challenge is unused here: this segment runs on the poll in the Game Hub.", JSON.stringify(WEEK01_CHALLENGE), JSON.stringify(HEAD_TO_HEAD_GAMES), now, now),
+      ...slides.map((slide, index) => db.prepare("INSERT OR IGNORE INTO training_plan_slides (plan_id, slide_id, position) VALUES (?, ?, ?)").bind(HEAD_TO_HEAD_PLAN_ID, slide.id, index)),
+      audit("lesson.seed_head_to_head", { slides: slides.length }),
+    ]);
+    return json({ lesson: await getLesson(env, HEAD_TO_HEAD_LESSON_ID), planId: HEAD_TO_HEAD_PLAN_ID, created: true }, 201);
   }
 
   if (path === "/seed/ai-feedback-slide" && method === "POST") {

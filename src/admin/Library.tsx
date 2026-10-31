@@ -3,11 +3,15 @@ import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ChevronLeft, ChevronRight,
 import { useFullscreen } from "../PresenterScreen";
 import { SlideStage } from "../slides/Deck";
 import { SlideRenderer } from "../slides/SlideRenderer";
+import { weekId } from "../shared/curriculum";
 import { stepCount } from "../shared/slideDoc";
 import { TEMPLATE_IDS, TEMPLATE_INFO, createFromTemplate, type TemplateId } from "../shared/templates";
 import type { Language } from "../shared/types";
 import { Notice, TerminalWindow, t } from "../ui";
 import { adminApi, type AdminLesson, type AdminLessonDetail, type AdminSlide } from "./adminApi";
+
+/** Lesson ids of weeks 3 to 12; the import button shows while any of them is missing. */
+const CURRICULUM_IDS = Array.from({ length: 10 }, (_, index) => weekId(index + 3));
 
 export default function Library({ language, onEdit }: { language: Language; onEdit: (lessonId: string, slideId: string | null) => void }) {
   const [lessons, setLessons] = useState<AdminLesson[]>([]);
@@ -54,6 +58,8 @@ export default function Library({ language, onEdit }: { language: Language; onEd
     void run(async () => { const { lesson } = await adminApi.createLesson({ title }); setNewTitle(""); setSelected(lesson.id); setDetail(lesson); });
   };
   const seedWeek02 = () => void run(async () => { const { lesson } = await adminApi.seedWeek02(); setSelected(lesson.id); setDetail(lesson); setNotice(t(language, "Week 02 imported. A draft plan with its challenge, cases and feedback wording is waiting in the Weekly Planner: review it, then publish.", "นำเข้าสัปดาห์ที่ 2 แล้ว มีแผนฉบับร่างพร้อมโจทย์ เคส และคำถามแบบสอบถามรออยู่ใน Weekly Planner ตรวจแล้วเผยแพร่ได้เลย")); });
+  const seedCurriculum = () => void run(async () => { const { results } = await adminApi.seedCurriculum(); const added = results.filter((row) => row.status === "imported").length; setNotice(t(language, `Imported ${added} weeks (3 to 12). Each has a draft plan with its games in the Weekly Planner. Review, then publish.`, `นำเข้า ${added} สัปดาห์ (3 ถึง 12) แต่ละสัปดาห์มีแผนฉบับร่างพร้อมเกมใน Weekly Planner ตรวจแล้วเผยแพร่ได้เลย`)); });
+  const seedHeadToHead = () => void run(async () => { const { lesson } = await adminApi.seedHeadToHead(); setSelected(lesson.id); setDetail(lesson); setNotice(t(language, "Head-to-Head imported. Paste your prepared ChatGPT and Claude answers over the [placeholders] on the round slides before using it. A draft plan with the poll is in the Weekly Planner.", "นำเข้า Head-to-Head แล้ว วางคำตอบ ChatGPT และ Claude ที่เตรียมไว้แทนข้อความใน [วงเล็บ] บนสไลด์แต่ละรอบก่อนใช้ มีแผนฉบับร่างพร้อมโพลอยู่ใน Weekly Planner")); });
   const seed = () => void run(async () => { const { lesson } = await adminApi.seedWeek01(); setSelected(lesson.id); setDetail(lesson); });
 
   const replaceSlide = (slide: AdminSlide) => setDetail((current) => current && { ...current, slides: current.slides.map((item) => (item.id === slide.id ? slide : item)) });
@@ -77,6 +83,8 @@ export default function Library({ language, onEdit }: { language: Language; onEd
         </form>
         {(() => { const week01 = lessons.find((lesson) => lesson.id === "week01-starter"); return !week01 || (week01.slideCount < 13 && !lessons.some((lesson) => lesson.id === "week01-skills-starter")); })() && <button className="btn btn--ghost" disabled={busy} onClick={seed}><Download size={15} />{t(language, "Import Week 01 starter lessons", "นำเข้าบทเรียนสัปดาห์ที่ 1")}</button>}
         {!lessons.some((lesson) => lesson.id === "week02-starter") && <button className="btn btn--ghost" disabled={busy} onClick={seedWeek02}><Download size={15} />{t(language, "Import Week 02 starter", "นำเข้าสัปดาห์ที่ 2")}</button>}
+        {CURRICULUM_IDS.some((lessonId) => !lessons.some((lesson) => lesson.id === lessonId)) && <button className="btn btn--ghost" disabled={busy} onClick={seedCurriculum}><Download size={15} />{t(language, "Import Weeks 3 to 12", "นำเข้าสัปดาห์ที่ 3 ถึง 12")}</button>}
+        {!lessons.some((lesson) => lesson.id === "head2head-starter") && <button className="btn btn--ghost" disabled={busy} onClick={seedHeadToHead}><Download size={15} />{t(language, "Import Head-to-Head segment", "นำเข้า Head-to-Head")}</button>}
         {lessons.map((lesson) => <button key={lesson.id} className={`lesson-item${selected === lesson.id ? " is-on" : ""}${lesson.archived ? " is-archived" : ""}`} onClick={() => setSelected(lesson.id)}>
           <b>{lesson.title}</b>
           <small>{lesson.category || "—"} · {lesson.slideCount} {t(language, "slides", "สไลด์")}{lesson.archived ? " · archived" : ""}</small>

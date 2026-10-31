@@ -1,6 +1,6 @@
 # AI Weekly Training Roadmap: 12 Weeks (DRAFT for review)
 
-Status: proposal only. Nothing below Week 02 is built yet. Wording and order are open to change.
+Status: Weeks 1 to 12 now exist as importable starter lessons with draft plans and games (weeks 3 to 12 via Lesson Library > Import Weeks 3 to 12). Teaching scripts are in docs/teaching-scripts/. Wording and order are open to change after a pilot.
 
 Rules for every game: it must run in the web app (participants join on a phone). Every game must still work when the AI is busy, down or not configured: the room's votes and answers written in advance decide the result, and AI is an extra, never the only judge.
 

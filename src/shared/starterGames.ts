@@ -23,6 +23,17 @@ export const WEEK01_GAMES: GameDef[] = [
   },
 ];
 
+/** The blind vote for the Head-to-Head segment: one question per round slide. The answers themselves are on the slides. */
+export const HEAD_TO_HEAD_GAMES: GameDef[] = [
+  {
+    id: "head-to-head", kind: "poll", title: b("Head-to-Head: which answer?", "Head-to-Head: เลือกคำตอบไหน?"),
+    questions: [1, 2, 3].map((round) => ({
+      text: b(`Round ${round}: which answer would you actually use?`, `รอบที่ ${round}: คุณจะใช้คำตอบไหนจริง ๆ?`),
+      options: [b("Answer A", "คำตอบ A"), b("Answer B", "คำตอบ B"), b("Can't tell", "ตัดสินไม่ได้")],
+    })),
+  },
+];
+
 /** Games that ship with the Week 02 starter plan. */
 export const WEEK02_GAMES: GameDef[] = [
   {

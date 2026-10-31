@@ -1,10 +1,17 @@
-import type { ColorToken, FontSize, Paragraph, SlideDoc, SlideElement, TextElement, WidgetKind } from "./slideDoc";
+import type { ColorToken, SlideDoc, SlideElement } from "./slideDoc";
+import { card, chrome, doc, heading, para, text, widget, type MakeId } from "./slideKit";
+import {
+  bigNumbersLayout, cardsLayout, checklistLayout, doDontLayout, heroLayout, rulesLayout, statementLayout, timelineLayout,
+} from "./layouts";
 
-export type MakeId = () => string;
+// The builders live in slideKit.ts; re-exported here because lessons and tests import them from this module.
+export { card, chrome, doc, heading, para, text, widget };
+export type { MakeId };
 
 export const TEMPLATE_IDS = [
   "title", "title-content", "comparison", "image-text", "step-by-step", "summary",
   "interactive-challenge", "prompt-battle", "leaderboard",
+  "hero", "three-cards", "big-statement", "checklist", "do-dont", "big-numbers", "timeline", "game-rules",
 ] as const;
 export type TemplateId = typeof TEMPLATE_IDS[number];
 
@@ -18,35 +25,15 @@ export const TEMPLATE_INFO: Record<TemplateId, { name: string; nameTh: string; l
   "interactive-challenge": { name: "Interactive Challenge", nameTh: "โจทย์สด", live: true },
   "prompt-battle": { name: "Prompt Battle", nameTh: "Prompt Battle", live: true },
   "leaderboard": { name: "Leaderboard", nameTh: "ตารางอันดับ", live: true },
+  "hero": { name: "Week Opener", nameTh: "หน้าเปิดสัปดาห์" },
+  "three-cards": { name: "Three Cards", nameTh: "การ์ดสามใบ" },
+  "big-statement": { name: "Big Statement", nameTh: "ประโยคใหญ่" },
+  "checklist": { name: "Checklist + Tip", nameTh: "เช็กลิสต์ + เคล็ดลับ" },
+  "do-dont": { name: "Do and Don't", nameTh: "ควรและไม่ควร" },
+  "big-numbers": { name: "Big Numbers", nameTh: "ตัวเลขใหญ่" },
+  "timeline": { name: "Timeline", nameTh: "ไทม์ไลน์" },
+  "game-rules": { name: "Game Rules", nameTh: "กติกาเกม", live: true },
 };
-
-// ------------------------------------------------------------------ builders
-
-export const para = (text: string, size: FontSize, options: Partial<Omit<Paragraph, "runs" | "size">> & { color?: ColorToken; bold?: boolean } = {}): Paragraph => {
-  const { color, bold, ...rest } = options;
-  return { font: "sans", ...rest, size, runs: [{ text, ...(color ? { color } : {}), ...(bold ? { bold } : {}) }] };
-};
-
-export const text = (id: MakeId, x: number, y: number, w: number, h: number, paragraphs: Paragraph[], extra: Partial<TextElement> = {}): TextElement =>
-  ({ id: id(), type: "text", x, y, w, h, paragraphs, ...extra });
-
-export const widget = (id: MakeId, x: number, y: number, w: number, h: number, kind: WidgetKind): SlideElement =>
-  ({ id: id(), type: "widget", widget: kind, x, y, w, h });
-
-/** Brand line and footer shared by every template, matching the built-in deck. */
-export const chrome = (id: MakeId, kicker: string): SlideElement[] => [
-  text(id, 64, 40, 700, 36, [para("4Seas · live training", 20, { font: "mono", color: "text-2" })]),
-  text(id, 1136, 40, 400, 36, [para(kicker, 20, { font: "mono", color: "accent", align: "right" })]),
-  { id: id(), type: "shape", shape: "line", x: 64, y: 832, w: 1472, h: 2, stroke: "border", strokeWidth: 1 },
-  text(id, 64, 844, 900, 32, [para("4Seas Nimman · Chiang Mai", 16, { font: "mono", color: "text-2" })]),
-];
-
-export const heading = (id: MakeId, eyebrow: string, title: string): SlideElement[] => [
-  text(id, 64, 104, 1472, 40, [para(`// ${eyebrow}`, 24, { font: "mono", color: "accent" })]),
-  text(id, 64, 146, 1472, 84, [para(title, 60, { font: "mono", bold: true })]),
-];
-
-export const doc = (elements: SlideElement[], notes?: string): SlideDoc => ({ schema: 1, background: { token: "bg" }, elements, ...(notes ? { notes } : {}) });
 
 // ----------------------------------------------------------------- templates
 
@@ -109,7 +96,7 @@ export function createFromTemplate(template: TemplateId, id: MakeId): SlideDoc {
     case "interactive-challenge":
       return doc([
         ...chrome(id, "live challenge"),
-        ...heading(id, "live activity", "Live Prompt Challenge"),
+        ...heading(id, "live activity", "Live Prompt Challenge", 1000),
         widget(id, 64, 260, 1000, 400, "challenge"),
         widget(id, 64, 680, 1000, 130, "live-stats"),
         widget(id, 1104, 140, 432, 670, "join"),
@@ -125,6 +112,56 @@ export function createFromTemplate(template: TemplateId, id: MakeId): SlideDoc {
         ...heading(id, "community vote", "Final Rankings"),
         widget(id, 64, 260, 1472, 560, "leaderboard"),
       ], "Live slide: champion and rankings appear once the Grand Final is complete.");
+    case "hero":
+      return heroLayout(id, {
+        kicker: "week opener", number: "03", title: "Lesson title goes here",
+        outcome: { en: "What people will be able to do after this session.", th: "สิ่งที่ผู้เรียนจะทำได้หลังจบสัปดาห์นี้" },
+        lines: ["learn: one new skill", "play: one live game", "time: 50 minutes"],
+        wow: { en: "the live demo everyone will remember", th: "เดโมสดที่ทุกคนจะจำได้" },
+      });
+    case "three-cards":
+      return cardsLayout(id, {
+        kicker: "lesson", eyebrow: "three ideas", title: "Three things to remember", titleTh: "สามเรื่องที่ควรจำ", numbered: true,
+        cards: [1, 2, 3].map((n) => ({ title: `Idea ${n}`, body: { en: "Explain it in one short sentence.", th: "อธิบายใน 1 ประโยคสั้น ๆ" } })),
+        bar: { en: "One line that ties the three together.", th: "ประโยคเดียวที่สรุปทั้งสามข้อ" },
+      });
+    case "big-statement":
+      return statementLayout(id, {
+        kicker: "lesson", eyebrow: "the big idea",
+        big: { en: "One idea, said big.", th: "ประโยคสำคัญหนึ่งประโยค พูดให้ชัด" },
+        sub: { en: "Say why it matters.", th: "บอกว่าทำไมจึงสำคัญ" },
+      });
+    case "checklist":
+      return checklistLayout(id, {
+        kicker: "lesson", eyebrow: "before you send", title: "A short checklist", titleTh: "เช็กลิสต์สั้น ๆ",
+        items: [1, 2, 3].map((n) => ({ en: `Check number ${n}`, th: `ข้อที่ ${n}` })),
+        tip: { title: "Tip", body: { en: "One practical tip people can use today.", th: "เคล็ดลับที่ใช้ได้ทันที" } },
+      });
+    case "do-dont":
+      return doDontLayout(id, {
+        kicker: "lesson", eyebrow: "good habits", title: "Do and Don't", titleTh: "ควรและไม่ควร",
+        donts: [{ en: "Something to avoid", th: "สิ่งที่ควรเลี่ยง" }],
+        dos: [{ en: "Something to do instead", th: "สิ่งที่ควรทำแทน" }],
+        bar: "A one-line reminder.",
+      });
+    case "big-numbers":
+      return bigNumbersLayout(id, {
+        kicker: "lesson", eyebrow: "in numbers", title: "Numbers to remember", titleTh: "ตัวเลขที่ควรจำ",
+        stats: [{ value: "3", label: { en: "tries", th: "ครั้ง" } }, { value: "60", label: { en: "seconds", th: "วินาที" } }, { value: "1", label: { en: "habit", th: "นิสัย" } }],
+        bar: { en: "What the numbers mean together.", th: "ตัวเลขเหล่านี้รวมกันหมายถึงอะไร" },
+      });
+    case "timeline":
+      return timelineLayout(id, {
+        kicker: "lesson", eyebrow: "step by step", title: "How it flows", titleTh: "ลำดับขั้นตอน",
+        steps: ["Start", "Check", "Send"].map((label) => ({ label, body: { en: "What happens in this step.", th: "เกิดอะไรขึ้นในขั้นนี้" } })),
+        bar: "A one-line summary of the flow.",
+      });
+    case "game-rules":
+      return rulesLayout(id, {
+        kicker: "game time", title: "Game: Name It", titleTh: "เกม: ตั้งชื่อเกม",
+        rules: [{ en: "Join with the code on the right.", th: "เข้าร่วมด้วยรหัสทางขวา" }, { en: "Answer on your phone.", th: "ตอบบนมือถือ" }],
+        scoring: { en: "100 points per correct answer", th: "ตอบถูกได้ 100 คะแนน" },
+      });
   }
 }
 
@@ -272,10 +309,72 @@ export function aiFeedbackSlide(id: MakeId): { title: string; doc: SlideDoc } {
   };
 }
 
-// ------------------------------------------------------------ skills segment
+// ------------------------------------------------------- head-to-head segment
 
-export const card = (id: MakeId, x: number, y: number, w: number, h: number, stroke: ColorToken, step?: number): SlideElement =>
-  ({ id: id(), type: "shape", shape: "rounded", x, y, w, h, fill: "surface", stroke, strokeWidth: 2, ...(step ? { step } : {}) });
+const ROUND_SAMPLES: Array<{ prompt: string; promptTh: string }> = [
+  { prompt: "Write a polite message telling a guest their room will be ready in 30 minutes. Keep it under 60 words.", promptTh: "เขียนข้อความสุภาพบอกแขกว่าห้องจะพร้อมในอีก 30 นาที ไม่เกิน 60 คำ" },
+  { prompt: "Explain in two sentences why people should back up their files.", promptTh: "อธิบายใน 2 ประโยคว่าทำไมควรสำรองไฟล์" },
+  { prompt: "Rewrite \"Send me the report now\" so it sounds friendly but still clear.", promptTh: "เขียน \"ส่งรายงานมาเดี๋ยวนี้\" ใหม่ให้เป็นมิตรแต่ยังชัดเจน" },
+];
+
+function headToHeadRound(id: MakeId, round: number): { title: string; doc: SlideDoc } {
+  const sample = ROUND_SAMPLES[round - 1];
+  return {
+    title: `Head-to-Head: Round ${round}`,
+    doc: doc([
+      ...chrome(id, `head-to-head · round ${round}`),
+      ...heading(id, "same prompt, two answers", `Round ${round}: Which Is Better?`),
+      { id: id(), type: "window", title: "prompt.txt", x: 64, y: 240, w: 1472, h: 172 },
+      text(id, 96, 308, 1408, 100, [para(sample.prompt, 24, { font: "mono" }), para(sample.promptTh, 20, { color: "text-2" })]),
+      { id: id(), type: "window", title: "answer_A.txt", x: 64, y: 432, w: 716, h: 300 },
+      text(id, 96, 504, 652, 210, [para("[Paste answer A here, about 60 words. Do not edit it.]", 24)]),
+      { id: id(), type: "window", title: "answer_B.txt", x: 820, y: 432, w: 716, h: 300 },
+      text(id, 852, 504, 652, 210, [para("[Paste answer B here, about 60 words. Do not edit it.]", 24)]),
+      text(id, 64, 748, 1472, 64, [para("Reveal: A = [ChatGPT or Claude]   B = [the other one]", 28, { font: "mono", color: "accent" })], { step: 1 }),
+    ], "Prepare before the session: send the same prompt to ChatGPT and to Claude, paste both answers unedited, and note the tool and version. Choose at random which one is A. Open the Head-to-Head poll in the Game Hub, let the room vote on their phones, then press next to reveal who wrote which. Practice prompts only, never real names or data."),
+  };
+}
+
+/**
+ * A short segment for any week: the room votes blind between two prepared answers (for example ChatGPT and Claude),
+ * then the authors are revealed. The answers are pasted in by the presenter, so no live AI call is needed.
+ */
+export function headToHeadLesson(id: MakeId): Array<{ title: string; doc: SlideDoc }> {
+  return [
+    {
+      title: "Head-to-Head: Which Answer Wins?",
+      doc: doc([
+        ...chrome(id, "head-to-head"),
+        ...heading(id, "blind vote", "Head-to-Head: Which Answer Wins?"),
+        text(id, 64, 270, 1472, 400, [
+          para("Same prompt. Two AI tools. You do not know who wrote which.", 32, { font: "mono", bold: true }),
+          para("Read both answers, then vote on your phone.", 28, { bullet: true }),
+          para("Pick the one you would actually use at work.", 28, { bullet: true }),
+          para("After the vote we reveal the authors.", 28, { bullet: true }),
+          para("อ่านทั้งสองคำตอบ แล้วโหวตบนมือถือ เลือกอันที่คุณจะใช้จริงในงาน", 24, { color: "text-2" }),
+        ]),
+        text(id, 64, 700, 1472, 100, [para("Practice prompts only. Both answers were prepared before the session.", 24, { font: "mono", color: "accent" })]),
+      ], "Explain the rules. Both answers were generated before the session from the same prompt and pasted in without editing."),
+    },
+    ...ROUND_SAMPLES.map((_, index) => headToHeadRound(id, index + 1)),
+    {
+      title: "Head-to-Head: What Did We Learn?",
+      doc: doc([
+        ...chrome(id, "head-to-head · recap"),
+        ...heading(id, "recap", "What Did We Learn?"),
+        text(id, 64, 270, 1472, 500, [
+          para("01  No tool wins every task. Try the same task in two tools.", 28),
+          para("02  Choose by the result you can use, not by the brand.", 28),
+          para("03  Tools change often: check again every few months.", 28),
+          para("04  Always read and fact-check before you send.", 28),
+          para("ไม่มีเครื่องมือไหนชนะทุกงาน ลองงานเดียวกันกับสองตัวแล้วเลือกจากผลที่ใช้ได้จริง", 24, { color: "text-2" }),
+        ]),
+      ], "Ask two people to say why they voted the way they did. Link it to next week's task."),
+    },
+  ];
+}
+
+// ------------------------------------------------------------ skills segment
 
 /**
  * Part 2 of Week 01: reusable skills. Appended after Final Results in both the built-in deck and the
@@ -355,20 +454,20 @@ export function skillsLesson(id: MakeId): Array<{ title: string; doc: SlideDoc }
       doc: doc([
         ...chrome(id, "skills"),
         ...heading(id, "switch to Claude Code", "Live Demo"),
-        card(id, 64, 260, 1472, 140, "accent", 1),
-        text(id, 100, 276, 1400, 110, [
+        card(id, 64, 260, 1472, 150, "accent", 1),
+        text(id, 100, 274, 1400, 128, [
           para("01  The task", 32, { font: "mono", bold: true, color: "accent" }),
           para("Plan a 30-person workshop for next Thursday.", 28),
           para("วางแผนเวิร์กชอป 30 คนสำหรับวันพฤหัสบดีหน้า", 20, { color: "text-2" }),
         ], { step: 1 }),
-        card(id, 64, 420, 1472, 140, "danger", 2),
-        text(id, 100, 436, 1400, 110, [
+        card(id, 64, 424, 1472, 150, "danger", 2),
+        text(id, 100, 438, 1400, 128, [
           para("02  Round 1 · no skill", 32, { font: "mono", bold: true, color: "danger" }),
           para("Just ask Claude for the plan.", 28),
           para("ขอแผนจาก Claude ตรง ๆ โดยไม่ใช้สกิล", 20, { color: "text-2" }),
         ], { step: 2 }),
-        card(id, 64, 580, 1472, 140, "success", 3),
-        text(id, 100, 596, 1400, 110, [
+        card(id, 64, 588, 1472, 150, "success", 3),
+        text(id, 100, 602, 1400, 128, [
           para("03  Round 2 · with the skill", 32, { font: "mono", bold: true, color: "success" }),
           para("Type /grill-me, then give the same task.", 28),
           para("พิมพ์ /grill-me แล้วให้โจทย์เดิม", 20, { color: "text-2" }),
