@@ -124,25 +124,28 @@ export interface ChecklistOptions {
   items: Bi[];
   tip: { title: string; body: Bi };
   tone?: ColorToken;
+  /** Puts the tip card on the left. */
+  flip?: boolean;
   notes?: string;
 }
 
 /** Up to five ticked rows that appear one by one, with a tip card on the right. */
 export function checklistLayout(id: MakeId, o: ChecklistOptions): SlideDoc {
   const tone = o.tone ?? "success";
+  const ox = o.flip ? 540 : 0;
   return doc([
     ...chrome(id, o.kicker),
     ...head(id, o.eyebrow, o.title, o.titleTh),
     ...o.items.flatMap((item, index): SlideElement[] => {
       const y = 290 + index * 98;
       return [
-        { id: id(), type: "shape", shape: "ellipse", x: 64, y: y + 20, w: 44, h: 44, fill: tone, step: index + 1 },
-        text(id, 64, y + 20, 44, 44, [para("✓", 28, { font: "mono", bold: true, color: "on-accent", align: "center" })], { valign: "middle", step: index + 1 }),
-        text(id, 132, y, 880, 86, [para(item.en, 28), para(item.th, 24, { color: "text-2" })], { step: index + 1 }),
+        { id: id(), type: "shape", shape: "ellipse", x: 64 + ox, y: y + 20, w: 44, h: 44, fill: tone, step: index + 1 },
+        text(id, 64 + ox, y + 20, 44, 44, [para("✓", 28, { font: "mono", bold: true, color: "on-accent", align: "center" })], { valign: "middle", step: index + 1 }),
+        text(id, 132 + ox, y, o.flip ? 872 : 880, 86, [para(item.en, 28), para(item.th, 24, { color: "text-2" })], { step: index + 1 }),
       ];
     }),
-    card(id, 1060, 290, 476, 470, tone),
-    text(id, 1088, 314, 420, 420, [
+    card(id, o.flip ? 64 : 1060, 290, 476, 470, tone),
+    text(id, o.flip ? 92 : 1088, 314, 420, 420, [
       para(o.tip.title, 32, { font: "mono", bold: true, color: tone }),
       para(o.tip.body.en, 28),
       para(o.tip.body.th, 24, { color: "text-2" }),
@@ -162,6 +165,8 @@ export interface DoDontOptions {
   dontTitle?: Bi;
   doTitle?: Bi;
   bar?: string;
+  /** Puts the green card on the left. */
+  flip?: boolean;
   notes?: string;
 }
 
@@ -178,8 +183,8 @@ export function doDontLayout(id: MakeId, o: DoDontOptions): SlideDoc {
   return doc([
     ...chrome(id, o.kicker),
     ...head(id, o.eyebrow, o.title, o.titleTh),
-    ...side(64, "danger", o.dontTitle ?? { en: "Don't", th: "ไม่ควร" }, o.donts),
-    ...side(820, "success", o.doTitle ?? { en: "Do", th: "ควร" }, o.dos),
+    ...side(o.flip ? 820 : 64, "danger", o.dontTitle ?? { en: "Don't", th: "ไม่ควร" }, o.donts),
+    ...side(o.flip ? 64 : 820, "success", o.doTitle ?? { en: "Do", th: "ควร" }, o.dos),
     ...(o.bar ? [text(id, 64, 762, FULL, 44, [para(o.bar, 24, { font: "mono", color: "accent" })])] : []),
   ], o.notes);
 }
@@ -264,6 +269,8 @@ export interface RulesOptions {
   titleTh?: string;
   rules: Bi[];
   scoring: Bi;
+  /** Puts the join panel on the left. */
+  flip?: boolean;
   notes?: string;
 }
 
@@ -272,13 +279,13 @@ export function rulesLayout(id: MakeId, o: RulesOptions): SlideDoc {
   return doc([
     ...chrome(id, o.kicker),
     ...head(id, "game time", o.title, o.titleTh),
-    { id: id(), type: "window", title: "game.exe", x: 64, y: 290, w: 1000, h: 510 },
-    text(id, 96, 362, 936, 420, [
+    { id: id(), type: "window", title: "game.exe", x: o.flip ? 536 : 64, y: 290, w: 1000, h: 510 },
+    text(id, o.flip ? 568 : 96, 362, 936, 420, [
       ...o.rules.flatMap((rule) => [para(rule.en, 28, { bullet: true }), para(rule.th, 20, { color: "text-2" })]),
       para(`Score: ${o.scoring.en}`, 24, { font: "mono", color: "success" }),
       para(o.scoring.th, 20, { color: "text-2" }),
     ]),
-    widget(id, 1104, 290, 432, 510, "join"),
+    widget(id, o.flip ? 64 : 1104, 290, 432, 510, "join"),
   ], o.notes, "bg");
 }
 
@@ -292,25 +299,28 @@ export interface DemoOptions {
   windowTitle: string;
   steps: Bi[];
   watch: { title: string; bullets: Bi[] };
+  /** Puts the watch-for card on the left. */
+  flip?: boolean;
   notes?: string;
 }
 
 /** The presenter's live demo: three numbered steps in a window and a "what to notice" card. */
 export function demoLayout(id: MakeId, o: DemoOptions): SlideDoc {
+  const ox = o.flip ? 572 : 0;
   return doc([
     ...chrome(id, o.kicker),
     ...head(id, o.eyebrow, o.title, o.titleTh),
-    { id: id(), type: "window", title: o.windowTitle, x: 64, y: 290, w: 900, h: 500 },
+    { id: id(), type: "window", title: o.windowTitle, x: 64 + ox, y: 290, w: 900, h: 500 },
     ...o.steps.flatMap((step, index): SlideElement[] => {
       const y = 370 + index * 134;
       return [
-        { id: id(), type: "shape", shape: "ellipse", x: 96, y: y + 14, w: 48, h: 48, fill: "accent", step: index + 1 },
-        text(id, 96, y + 14, 48, 48, [para(String(index + 1), 28, { font: "mono", bold: true, color: "on-accent", align: "center" })], { valign: "middle", step: index + 1 }),
-        text(id, 166, y, 770, 120, [para(step.en, 28), para(step.th, 24, { color: "text-2" })], { step: index + 1 }),
+        { id: id(), type: "shape", shape: "ellipse", x: 96 + ox, y: y + 14, w: 48, h: 48, fill: "accent", step: index + 1 },
+        text(id, 96 + ox, y + 14, 48, 48, [para(String(index + 1), 28, { font: "mono", bold: true, color: "on-accent", align: "center" })], { valign: "middle", step: index + 1 }),
+        text(id, 166 + ox, y, 770, 120, [para(step.en, 28), para(step.th, 24, { color: "text-2" })], { step: index + 1 }),
       ];
     }),
-    card(id, 1000, 290, 536, 500, "accent"),
-    text(id, 1028, 314, 480, 452, [
+    card(id, o.flip ? 64 : 1000, 290, 536, 500, "accent"),
+    text(id, o.flip ? 92 : 1028, 314, 480, 452, [
       para(o.watch.title, 32, { font: "mono", bold: true, color: "accent" }),
       ...o.watch.bullets.flatMap((bullet) => [para(bullet.en, 24, { bullet: true }), para(bullet.th, 20, { color: "text-2" })]),
     ]),

@@ -90,7 +90,7 @@ export function weekLesson(spec: WeekSpec, id: MakeId): Array<{ title: string; d
         break;
       }
       case "compare": { const { layout: _, ...options } = concept; add(options.title, compareLayout(id, { kicker, ...options })); break; }
-      case "checklist": { const { layout: _, ...options } = concept; add(options.title, checklistLayout(id, { kicker, ...options })); break; }
+      case "checklist": { const { layout: _, ...options } = concept; add(options.title, checklistLayout(id, { kicker, ...options, flip: (spec.number + slides.length) % 2 === 1 })); break; }
       case "numbers": { const { layout: _, ...options } = concept; add(options.title, bigNumbersLayout(id, { kicker, ...options })); break; }
       case "timeline": {
         const { layout: _, ...options } = concept;
@@ -103,9 +103,9 @@ export function weekLesson(spec: WeekSpec, id: MakeId): Array<{ title: string; d
     }
   }
 
-  add(spec.demo.title, demoLayout(id, { kicker, ...spec.demo, notes: spec.demo.notes ?? spec.notes.demo }));
-  add(spec.safety.title, doDontLayout(id, { kicker, ...spec.safety, notes: spec.safety.notes ?? spec.notes.safety }));
-  add(spec.game.title, rulesLayout(id, { kicker, title: spec.game.title, titleTh: spec.game.titleTh, rules: spec.game.rules, scoring: spec.game.scoring, notes: spec.notes.game }));
+  add(spec.demo.title, demoLayout(id, { kicker, ...spec.demo, flip: spec.number % 3 === 0, notes: spec.demo.notes ?? spec.notes.demo }));
+  add(spec.safety.title, doDontLayout(id, { kicker, ...spec.safety, flip: spec.number % 2 === 1, notes: spec.safety.notes ?? spec.notes.safety }));
+  add(spec.game.title, rulesLayout(id, { kicker, title: spec.game.title, titleTh: spec.game.titleTh, rules: spec.game.rules, scoring: spec.game.scoring, flip: spec.number % 2 === 0, notes: spec.notes.game }));
   for (const material of spec.gameSlides ?? []) add(material.title, documentLayout(id, { kicker, ...material }));
 
   if (spec.challenge) {
