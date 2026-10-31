@@ -38,18 +38,23 @@ export interface HeroOptions {
   /** Up to six short lines for the terminal window, for example "learn: tone and format". */
   lines: string[];
   wow: Bi;
+  /** Puts the terminal window on the left and the title on the right. */
+  mirror?: boolean;
   notes?: string;
 }
 
 /** Opening slide: huge week number, title, what people will be able to do, and a teaser for the live demo. */
 export function heroLayout(id: MakeId, o: HeroOptions): SlideDoc {
+  const left = o.mirror ? 640 : 64;
+  const width = o.mirror ? 896 : 900;
+  const winX = o.mirror ? 64 : 1000;
   return doc([
     ...chrome(id, o.kicker),
-    text(id, 64, 128, 420, 170, [para(o.number, 120, { font: "mono", bold: true, color: "accent" })]),
-    text(id, 64, 312, 900, 170, [para(o.title, 60, { font: "mono", bold: true })]),
-    text(id, 64, 500, 900, 160, [para(o.outcome.en, 28), para(o.outcome.th, 28, { color: "text-2" })]),
-    { id: id(), type: "window", title: `start --week ${o.number}`, x: 1000, y: 130, w: 536, h: 430 },
-    text(id, 1032, 206, 472, 340, o.lines.map((line) => para(`> ${line}`, 24, { font: "mono", color: "success" }))),
+    text(id, left, 128, 420, 170, [para(o.number, 120, { font: "mono", bold: true, color: "accent" })]),
+    text(id, left, 312, width, 170, [para(o.title, 60, { font: "mono", bold: true })]),
+    text(id, left, 500, width, 160, [para(o.outcome.en, 28), para(o.outcome.th, 28, { color: "text-2" })]),
+    { id: id(), type: "window", title: `start --week ${o.number}`, x: winX, y: 130, w: 536, h: 430 },
+    text(id, winX + 32, 206, 472, 340, o.lines.map((line) => para(`> ${line}`, 24, { font: "mono", color: "success" }))),
     ...bar(id, 690, 120, { en: `★ Today's wow: ${o.wow.en}`, th: o.wow.th }),
   ], o.notes, "accent-soft");
 }
@@ -399,4 +404,122 @@ export function documentLayout(id: MakeId, o: DocumentOptions): SlideDoc {
       ...o.hint.bullets.flatMap((bullet) => [para(bullet.en, 24, { bullet: true }), para(bullet.th, 20, { color: "text-2" })]),
     ]),
   ], o.notes);
+}
+
+// ---------------------------------------------------------------- sidebar
+
+export interface SidebarOptions {
+  kicker: string;
+  eyebrow: string;
+  title: string;
+  titleTh?: string;
+  /** Two to four rows. */
+  items: CardItem[];
+  /** A closing line at the bottom of the left panel. */
+  foot?: Bi | string;
+  notes?: string;
+}
+
+/** The title sits in a tall panel on the left and the points stack on the right, so it does not look like the card slides. */
+export function sidebarLayout(id: MakeId, o: SidebarOptions): SlideDoc {
+  const n = o.items.length;
+  const pitch = n <= 3 ? 230 : 178;
+  return doc([
+    ...chrome(id, o.kicker),
+    card(id, 64, 104, 470, 716, "accent"),
+    text(id, 96, 136, 406, o.foot ? 480 : 652, [
+      para(`// ${o.eyebrow}`, 24, { font: "mono", color: "accent" }),
+      para(o.title, o.title.length > 24 ? 40 : 48, { font: "mono", bold: true }),
+      ...(o.titleTh ? [para(o.titleTh, 24, { color: "text-2" })] : []),
+    ]),
+    ...(o.foot ? [text(id, 96, 640, 406, 150, typeof o.foot === "string" ? [para(o.foot, 20, { font: "mono", color: "accent" })] : [para(o.foot.en, 20, { font: "mono", color: "accent" }), para(o.foot.th, 20, { color: "text-2" })], { valign: "bottom" })] : []),
+    ...o.items.flatMap((item, index): SlideElement[] => {
+      const y = 104 + index * pitch;
+      const tone = item.tone ?? "accent";
+      return [
+        text(id, 580, y, 90, 60, [para(`0${index + 1}`, 40, { font: "mono", bold: true, color: tone })], { step: index + 1 }),
+        text(id, 680, y, 856, pitch - 14, [
+          para(item.title, 28, { font: "mono", bold: true }),
+          para(item.body.en, 24),
+          para(item.body.th, 20, { color: "text-2" }),
+        ], { step: index + 1 }),
+        ...(index < n - 1 ? [{ id: id(), type: "shape", shape: "line", x: 580, y: y + pitch - 8, w: 956, h: 2, stroke: "border", strokeWidth: 1, step: index + 1 } as SlideElement] : []),
+      ];
+    }),
+  ], o.notes, "surface");
+}
+
+// ------------------------------------------------------------------- grid
+
+export interface GridOptions {
+  kicker: string;
+  eyebrow: string;
+  title: string;
+  titleTh?: string;
+  /** Exactly four cells, two by two. */
+  cells: CardItem[];
+  bar?: Bi;
+  notes?: string;
+}
+
+/** Four cells in a two by two grid, revealed one at a time. */
+export function gridLayout(id: MakeId, o: GridOptions): SlideDoc {
+  const w = (FULL - GAP) / 2;
+  const h = o.bar ? 196 : 250;
+  const gap = o.bar ? 16 : GAP;
+  return doc([
+    ...chrome(id, o.kicker),
+    ...head(id, o.eyebrow, o.title, o.titleTh),
+    ...o.cells.flatMap((cell, index): SlideElement[] => {
+      const x = 64 + (index % 2) * (w + GAP);
+      const y = 290 + Math.floor(index / 2) * (h + gap);
+      const tone = cell.tone ?? "accent";
+      return [
+        card(id, x, y, w, h, tone === "accent" ? "border" : tone, index + 1),
+        { id: id(), type: "shape", shape: "rect", x, y: y + 20, w: 8, h: h - 40, fill: tone, step: index + 1 },
+        text(id, x + 32, y + 16, w - 56, h - 32, [
+          para(cell.title, 28, { font: "mono", bold: true, color: tone }),
+          para(cell.body.en, 24),
+          para(cell.body.th, 20, { color: "text-2" }),
+        ], { step: index + 1 }),
+      ];
+    }),
+    ...(o.bar ? bar(id, 290 + 2 * h + gap + 18, 92, o.bar) : []),
+  ], o.notes);
+}
+
+// -------------------------------------------------------------- spotlight
+
+/** One big idea on a solid block of colour. */
+export function spotlightLayout(id: MakeId, o: StatementOptions): SlideDoc {
+  return doc([
+    ...chrome(id, o.kicker),
+    text(id, 64, 104, FULL, 36, [para(`// ${o.eyebrow}`, 24, { font: "mono", color: "accent" })]),
+    { id: id(), type: "shape", shape: "rounded", x: 64, y: 160, w: FULL, h: 500, fill: "accent" },
+    text(id, 112, 196, 1376, 280, [para(o.big.en, o.big.en.length > 64 ? 60 : 72, { font: "mono", bold: true, color: "on-accent" })]),
+    text(id, 112, 500, 1376, 130, [para(o.big.th, 32, { color: "on-accent" })], { step: 1 }),
+    ...(o.sub ? [text(id, 64, 690, FULL, 120, [para(o.sub.en, 28, { font: "mono", color: "accent" }), para(o.sub.th, 24, { color: "text-2" })], { step: 2 })] : []),
+  ], o.notes, "bg");
+}
+
+// ----------------------------------------------------------------- retone
+
+/** Replaces the default orange accent with another colour token, so each week gets its own colour. */
+export function retone(slide: SlideDoc, tone: ColorToken): SlideDoc {
+  const swap = (token: ColorToken | undefined): ColorToken | undefined => (token === "accent" ? tone : token);
+  return {
+    ...slide,
+    elements: slide.elements.map((element): SlideElement => {
+      switch (element.type) {
+        case "text":
+          return { ...element, ...(element.color ? { color: swap(element.color) } : {}), paragraphs: element.paragraphs.map((p) => ({ ...p, runs: p.runs.map((run) => (run.color ? { ...run, color: swap(run.color) } : run)) })) };
+        case "shape":
+          return { ...element, ...(element.fill ? { fill: swap(element.fill) } : {}), ...(element.stroke ? { stroke: swap(element.stroke) } : {}) };
+        case "window":
+          return { ...element, border: swap(element.border ?? "accent") };
+        default:
+          return element;
+      }
+    }),
+  };
 }
