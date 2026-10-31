@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "4seas-training",
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "b57eed76-3697-4c47-97e2-f55cb1fa9aae",
       "migrations_dir": "./migrations"
     }
   ],
