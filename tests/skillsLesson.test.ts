@@ -65,9 +65,10 @@ describe("skillsLesson", () => {
 describe("skills slides in the decks", () => {
   it("appends them after Final Results in the Studio Week 01 lesson", () => {
     const lesson = week01Lesson(id);
-    expect(lesson).toHaveLength(13);
-    expect(lesson[6].title).toBe("Final Results");
-    expect(lesson.slice(7).map((slide) => slide.title)).toEqual(skillsLesson(id).map((slide) => slide.title));
+    expect(lesson).toHaveLength(14);
+    expect(lesson[4].title).toBe("Check Your Prompt (Privately)");
+    expect(lesson[7].title).toBe("Final Results");
+    expect(lesson.slice(8).map((slide) => slide.title)).toEqual(skillsLesson(id).map((slide) => slide.title));
   });
 
   it("appends them to the built-in deck without moving existing slides", () => {
@@ -84,12 +85,13 @@ describe("skills slides in the decks", () => {
 describe("week02Lesson", () => {
   const slides = week02Lesson(id);
 
-  it("has the thirteen Week 02 slides with the live ones in the right order", () => {
-    expect(slides).toHaveLength(13);
+  it("has the fourteen Week 02 slides with the live ones in the right order", () => {
+    expect(slides).toHaveLength(14);
+    expect(slides[9].title).toBe("Check Your Prompt (Privately)");
     const liveKinds = slides.map((slide) => slide.doc.elements.filter((element) => element.type === "widget").map((element) => element.type === "widget" ? element.widget : ""));
-    expect(liveKinds[9]).toEqual(["challenge", "live-stats", "join"]);
-    expect(liveKinds[10]).toEqual(["battle"]);
-    expect(liveKinds[11]).toEqual(["leaderboard"]);
+    expect(liveKinds[10]).toEqual(["challenge", "live-stats", "join"]);
+    expect(liveKinds[11]).toEqual(["battle"]);
+    expect(liveKinds[12]).toEqual(["leaderboard"]);
     expect(liveKinds.filter((kinds) => kinds.length).length).toBe(3);
   });
 

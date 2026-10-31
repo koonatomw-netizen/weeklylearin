@@ -1,7 +1,7 @@
 import type { Challenge, FeedbackQuestions } from "./deck";
 import type { Situation } from "./situations";
 import type { SlideDoc } from "./slideDoc";
-import { card, chrome, doc, heading, para, text, widget, type MakeId } from "./templates";
+import { aiFeedbackSlide, card, chrome, doc, heading, para, text, widget, type MakeId } from "./templates";
 
 /**
  * Week 02 starter: "Find Time: Automate the Boring Parts". It moves people who only ask AI questions
@@ -240,6 +240,7 @@ export function week02Lesson(id: MakeId): Array<{ title: string; doc: SlideDoc }
         text(id, 64, 760, 1472, 56, [para("Next week: how to check what AI gives you.", 28, { font: "mono", color: "accent" })]),
       ], "Say it plainly: during this session we use only invented material. Mention the company's own AI policy if there is one."),
     },
+    aiFeedbackSlide(id),
     {
       title: "Live Prompt Challenge",
       doc: doc([

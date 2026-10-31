@@ -215,6 +215,7 @@ export function week01Lesson(id: MakeId): Array<{ title: string; doc: SlideDoc }
         ]),
       ]),
     },
+    aiFeedbackSlide(id),
     { title: "Live Prompt Challenge", doc: createFromTemplate("interactive-challenge", id) },
     { title: "Prompt Battle", doc: createFromTemplate("prompt-battle", id) },
     {
@@ -232,6 +233,43 @@ export function week01Lesson(id: MakeId): Array<{ title: string; doc: SlideDoc }
     },
     ...skillsLesson(id),
   ];
+}
+
+/**
+ * Explains the private AI feedback button on the self-check screen, before the live writing round.
+ * Shared by the Week 01 and Week 02 lessons. It must keep saying that the feedback is not a score.
+ */
+export function aiFeedbackSlide(id: MakeId): { title: string; doc: SlideDoc } {
+  const steps: Array<[string, string, string, ColorToken]> = [
+    ["Submit your prompt", "Write it, send it, then open the self-check.", "เขียนพรอมป์ ส่ง แล้วเปิดหน้าเช็กตัวเอง", "accent"],
+    ["Tap Get AI feedback", "A private score and tips appear in about ten seconds.", "ขอฟีดแบ็กจาก AI จะเห็นคะแนนและคำแนะนำส่วนตัวในราว 10 วินาที", "accent"],
+    ["Improve and resend", "You have three attempts. Fix the weakest part first.", "ส่งได้ 3 ครั้ง แก้ส่วนที่อ่อนที่สุดก่อน", "success"],
+  ];
+  const gap = 24;
+  const width = Math.floor((1472 - gap * 2) / 3);
+  return {
+    title: "Check Your Prompt (Privately)",
+    doc: doc([
+      ...chrome(id, "ai feedback"),
+      ...heading(id, "after you submit", "Check Your Prompt (Privately)"),
+      ...steps.flatMap(([title, body, bodyTh, color], index): SlideElement[] => {
+        const x = 64 + index * (width + gap);
+        return [
+          card(id, x, 270, width, 440, "border", index + 1),
+          text(id, x + 28, 298, width - 56, 390, [
+            para(`0${index + 1}`, 32, { font: "mono", color }),
+            para(title, 32, { font: "mono", bold: true }),
+            para(body, 28),
+            para(bodyTh, 24, { color: "text-2" }),
+          ], { step: index + 1 }),
+        ];
+      }),
+      text(id, 64, 730, 1472, 90, [
+        para("Only you can see it. It is a guide, not a score. Votes decide the winner.", 28, { font: "mono", color: "accent" }),
+        para("Practice data only: your prompt is sent to an AI service. มีแค่คุณที่เห็น เป็นแนวทาง ไม่ใช่คะแนน", 24, { color: "text-2" }),
+      ]),
+    ], "Show where the button is. Stress that the AI gives private tips only; the room's votes still decide the Prompt Battle. If the AI is busy, the self-check list still works. Remind people to use practice data only."),
+  };
 }
 
 // ------------------------------------------------------------ skills segment
