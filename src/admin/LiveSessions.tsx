@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Radio, RefreshCw, Upload } from "lucide-react";
+import { ExternalLink, Radio, RefreshCw, Trash2, Upload } from "lucide-react";
 import { tokens } from "../api";
+import { isFinishedRoom } from "../shared/sessions";
 import type { Language } from "../shared/types";
 import { Notice, TerminalWindow, formatCode, t } from "../ui";
 import { adminApi, type AdminPlan, type AdminSession } from "./adminApi";
@@ -49,6 +50,43 @@ export default function LiveSessions({ language, navigate }: { language: Languag
     finally { setBusy(false); }
   }
 
+  async function remove(session: AdminSession) {
+    if (busy) return;
+    const running = !isFinishedRoom(session);
+    const ok = window.confirm(running
+      ? t(language, `Room ${formatCode(session.code)} may still be running. Delete it anyway? Its prompts, votes, answers and feedback are removed for good and anyone still in the room is disconnected. This cannot be undone.`,
+        `ห้อง ${formatCode(session.code)} อาจยังเปิดอยู่ ลบอยู่ดีหรือไม่? พรอมป์ โหวต คำตอบ และแบบสอบถามของห้องนี้จะหายถาวร และคนที่ยังอยู่ในห้องจะหลุด ย้อนกลับไม่ได้`)
+      : t(language, `Delete room ${formatCode(session.code)}? Its prompts, votes, answers and feedback are removed for good. This cannot be undone.`,
+        `ลบห้อง ${formatCode(session.code)}? พรอมป์ โหวต คำตอบ และแบบสอบถามของห้องนี้จะหายถาวร ย้อนกลับไม่ได้`));
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    try {
+      await adminApi.deleteSession(session.code);
+      setNotice(t(language, `Room ${formatCode(session.code)} deleted.`, `ลบห้อง ${formatCode(session.code)} แล้ว`));
+      load();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not delete the session."); }
+    finally { setBusy(false); }
+  }
+
+  async function purge(count: number) {
+    if (busy || count === 0) return;
+    const ok = window.confirm(t(language,
+      `Delete all ${count} finished rooms (ended, or started over a day ago)? Their prompts, votes, answers and feedback are removed for good. Rooms that are still running are kept. This cannot be undone.`,
+      `ลบห้องที่จบแล้วทั้งหมด ${count} ห้อง (จบแล้ว หรือเริ่มมาเกินหนึ่งวัน)? พรอมป์ โหวต คำตอบ และแบบสอบถามจะหายถาวร ห้องที่ยังเปิดอยู่จะไม่ถูกลบ ย้อนกลับไม่ได้`));
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await adminApi.purgeFinishedSessions();
+      setNotice(t(language, `Deleted ${result.deleted} finished rooms.`, `ลบห้องที่จบแล้ว ${result.deleted} ห้อง`));
+      load();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not delete the sessions."); }
+    finally { setBusy(false); }
+  }
+
+  const finishedCount = sessions?.filter((session) => isFinishedRoom(session)).length ?? 0;
+
   return <>
     <div className="admin-title"><div><h1>Live Sessions</h1><p>{t(language, "Each session presents a frozen published version, so the room always sees exactly what you approved.", "ทุกห้องใช้เวอร์ชันที่เผยแพร่และล็อกแล้ว ผู้เข้าร่วมจึงเห็นตรงตามที่อนุมัติ")}</p></div>
       <button className="btn btn--ghost" onClick={load}><RefreshCw size={15} />{t(language, "Refresh", "รีเฟรช")}</button></div>
@@ -63,7 +101,7 @@ export default function LiveSessions({ language, navigate }: { language: Languag
       </ul> : <p className="mono-dim">{t(language, "> no published plans yet — publish one in the Weekly Planner", "> ยังไม่มีแผนที่เผยแพร่ เผยแพร่ได้ใน Weekly Planner")}</p>}
       {plans?.some((plan) => plan.hasUnpublishedChanges) && <p className="hint">{t(language, "Plans marked \"unpublished changes\" will start with their last published version.", "แผนที่มี \"การแก้ที่ยังไม่เผยแพร่\" จะเริ่มด้วยเวอร์ชันที่เผยแพร่ล่าสุด")}</p>}
     </TerminalWindow>
-    <TerminalWindow title="recent-sessions">
+    <TerminalWindow title="recent-sessions" right={finishedCount > 0 ? <button className="btn btn--ghost" disabled={busy} onClick={() => void purge(finishedCount)}><Trash2 size={13} />{t(language, `Delete ${finishedCount} finished`, `ลบห้องที่จบแล้ว ${finishedCount} ห้อง`)}</button> : undefined}>
       {sessions === null ? <p className="mono-dim">loading…</p> : sessions.length ? <table className="data-table">
         <thead><tr><th>{t(language, "room", "ห้อง")}</th><th>{t(language, "deck", "สไลด์")}</th><th>{t(language, "started", "เริ่ม")}</th><th>{t(language, "stage", "ขั้น")}</th><th>{t(language, "people", "คน")}</th><th>{t(language, "feedback", "แบบสอบถาม")}</th><th /></tr></thead>
         <tbody>{sessions.map((session) => {
@@ -81,7 +119,8 @@ export default function LiveSessions({ language, navigate }: { language: Languag
               {!session.endedAt && plan?.hasUnpublishedChanges && <span className="mono-dim" title={t(language, "Publish the plan first, then update the room.", "เผยแพร่แผนก่อน แล้วจึงอัปเดตห้อง")}> {t(language, "unpublished edits", "มีการแก้ที่ยังไม่เผยแพร่")} </span>}
               {canOpen
               ?<button className="btn btn--ghost" onClick={() => navigate(`/?view=host&room=${session.code}`)}><ExternalLink size={13} />{t(language, "Presenter", "ผู้สอน")}</button>
-              : <span className="mono-dim" title={t(language, "Presenter access stays in the browser that started the room.", "สิทธิ์ผู้สอนอยู่ในเบราว์เซอร์ที่เริ่มห้อง")}>—</span>}</td>
+              : <span className="mono-dim" title={t(language, "Presenter access stays in the browser that started the room.", "สิทธิ์ผู้สอนอยู่ในเบราว์เซอร์ที่เริ่มห้อง")}>—</span>}
+              <button className="icon-button" disabled={busy} onClick={() => void remove(session)} aria-label={t(language, "Delete session", "ลบห้อง")} title={t(language, "Delete session", "ลบห้อง")}><Trash2 size={14} /></button></td>
           </tr>;
         })}</tbody>
       </table> : <p className="mono-dim">{t(language, "> no sessions yet", "> ยังไม่มีห้องเรียน")}</p>}

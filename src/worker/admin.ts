@@ -6,6 +6,7 @@ import { HEAD_TO_HEAD_GAMES, WEEK01_GAMES, WEEK02_GAMES } from "../shared/starte
 import { weekId, weekLesson, weekPlanId, weekTitle } from "../shared/curriculum";
 import { CURRICULUM } from "../shared/curriculumWeeks";
 import { WEEK02_CHALLENGE, WEEK02_FEEDBACK, WEEK02_NOTES, WEEK02_SITUATIONS, WEEK02_TITLE, week02Lesson } from "../shared/week02";
+import { isFinishedRoom } from "../shared/sessions";
 import { HttpError, cleanLine, json, readBody } from "./http";
 import { handleCaseSets } from "./caseSets";
 import { handlePlans, publishPlan } from "./plans";
@@ -155,6 +156,18 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     return json({ issues: [...groups.values()].sort((a, b) => b.sessions.length - a.sessions.length || b.latestAt.localeCompare(a.latestAt)) });
   }
 
+  if (path === "/sessions/purge" && method === "POST") {
+    // Deletes every finished room (ended, or started over a day ago and never ended) with its prompts, votes, answers and feedback.
+    const rooms = await db.prepare("SELECT code, created_at, ended_at FROM rooms").all<{ code: string; created_at: string; ended_at: string | null }>();
+    const codes = rooms.results.filter((room) => isFinishedRoom({ createdAt: room.created_at, endedAt: room.ended_at })).map((room) => room.code);
+    for (let index = 0; index < codes.length; index += 50) {
+      const chunk = codes.slice(index, index + 50);
+      await db.prepare(`DELETE FROM rooms WHERE code IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).run();
+    }
+    if (codes.length) await audit("sessions.purge", { deleted: codes.length }).run();
+    return json({ deleted: codes.length });
+  }
+
   const historyMatch = path.match(/^\/sessions\/([A-Z0-9]{6})(?:\/(tags))?$/i);
   if (historyMatch) {
     const code = historyMatch[1].toUpperCase();
@@ -190,6 +203,14 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
         audit("session.tag.delete", { roomCode: code, tagId }),
       ]);
       return json({ tags: await sessionTags(db, code) });
+    }
+    if (!historyMatch[2] && method === "DELETE") {
+      // Prompts, votes, game answers, feedback and tags go with the room (ON DELETE CASCADE).
+      await db.batch([
+        db.prepare("DELETE FROM rooms WHERE code = ?").bind(code),
+        audit("session.delete", { roomCode: code, title: room.title, activity: room.activity }),
+      ]);
+      return json({ ok: true });
     }
     if (!historyMatch[2] && method === "GET") {
       const [people, feedback, battles, tags] = await Promise.all([
