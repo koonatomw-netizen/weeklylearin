@@ -88,6 +88,5 @@ src/PresenterScreen.tsx · ProjectorScreen.tsx · ParticipantScreen.tsx · Feedb
 src/ui.tsx · theme.ts · useRoom.ts · api.ts · styles.css
 tests/                 Vitest unit tests
 scripts/               smoke-room.mjs · smoke-admin.mjs · smoke-studio.mjs · load-check.mjs
-legacy/                Retired AI scoring, slide-template editor and old planning docs (not built)
 docs/REFACTOR.md       Audit, plan and change summary
 ```
